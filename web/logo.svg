@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#090d16"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="primary-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="50%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="emerald-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="amber-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Base rounded shield/hexagon container -->
+  <rect width="512" height="512" rx="112" fill="url(#bg-grad)"/>
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>
+
+  <!-- Radar / Outpost Orbit rings -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#3b82f6" stroke-width="2" stroke-opacity="0.2" stroke-dasharray="8 8"/>
+  <circle cx="256" cy="256" r="120" fill="none" stroke="#06b6d4" stroke-width="2" stroke-opacity="0.3" stroke-dasharray="4 6"/>
+  <circle cx="256" cy="256" r="60" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-opacity="0.4"/>
+
+  <!-- Terminal Bracket & Outpost Beacon Graphic -->
+  <g filter="url(#glow)">
+    <!-- Stylized Terminal Prompt Prompt Carat / Outpost Antenna -->
+    <path d="M150 170 L230 256 L150 342" fill="none" stroke="url(#primary-grad)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Terminal Underscore / Beacon Ray -->
+    <path d="M260 342 L360 342" fill="none" stroke="#34d399" stroke-width="28" stroke-linecap="round"/>
+    
+    <!-- Central Outpost Beacon / Relay Core -->
+    <circle cx="340" cy="190" r="24" fill="url(#primary-grad)"/>
+    <circle cx="340" cy="190" r="12" fill="#ffffff"/>
+    
+    <!-- Orbiting agent nodes -->
+    <circle cx="256" cy="76" r="14" fill="#34d399"/>
+    <circle cx="436" cy="256" r="14" fill="#fbbf24"/>
+    <circle cx="256" cy="436" r="14" fill="#38bdf8"/>
+    <circle cx="76" cy="256" r="14" fill="#a855f7"/>
+
+    <!-- Pulse waves radiating from beacon -->
+    <path d="M305 155 A 50 50 0 0 1 375 225" fill="none" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" opacity="0.8"/>
+    <path d="M285 135 A 80 80 0 0 1 395 245" fill="none" stroke="#818cf8" stroke-width="5" stroke-linecap="round" opacity="0.5"/>
+  </g>
+</svg>

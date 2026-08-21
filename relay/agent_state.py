@@ -1,0 +1,260 @@
+"""Agent state management and normalization for herdr-outpost relay."""
+
+from __future__ import annotations
+
+import datetime
+import socket
+from typing import Any, Dict, Optional, Union
+
+VALID_STATUSES = {"blocked", "working", "done", "idle", "unknown"}
+
+STATUS_MAP = {
+    "blocked": "blocked",
+    "waiting": "blocked",
+    "prompt": "blocked",
+    "prompting": "blocked",
+    "approval": "blocked",
+    "needs_approval": "blocked",
+    "confirm": "blocked",
+    "working": "working",
+    "running": "working",
+    "busy": "working",
+    "executing": "working",
+    "thinking": "working",
+    "done": "done",
+    "finished": "done",
+    "completed": "done",
+    "success": "done",
+    "idle": "idle",
+    "ready": "idle",
+    "waiting_for_input": "blocked",
+    "paused": "idle",
+    "stopped": "idle",
+    "unknown": "unknown",
+}
+
+
+def normalize_status(raw_status: Optional[str]) -> str:
+    """Normalize any raw agent status string to standard herdr-outpost status."""
+    if not raw_status:
+        return "unknown"
+    cleaned = str(raw_status).strip().lower().replace("-", "_").replace(" ", "_")
+    return STATUS_MAP.get(cleaned, "unknown")
+
+
+def get_default_hostname(local_hostname: Optional[str] = None) -> str:
+    """Get the canonical local hostname."""
+    if local_hostname:
+        return str(local_hostname).strip()
+    try:
+        return socket.gethostname().split(".")[0] or "local"
+    except Exception:
+        return "local"
+
+
+def build_agent_id(host: str, workspace: Optional[str], pane_id: Union[str, int]) -> str:
+    """Create a deterministic unique key for an agent."""
+    h = (host or "local").strip()
+    ws = (workspace or "default").strip()
+    p = str(pane_id).strip()
+    return f"{h}:{ws}:{p}"
+
+
+def parse_agent_id(agent_id: str) -> tuple[str, str, str]:
+    """Parse an agent_id into (host, workspace, pane_id)."""
+    parts = str(agent_id).split(":")
+    if len(parts) == 1:
+        return "local", "default", parts[0]
+    if len(parts) == 2:
+        return parts[0], "default", parts[1]
+    return parts[0], parts[1], ":".join(parts[2:])
+
+
+def normalize_agent_dict(raw: Dict[str, Any], local_hostname: Optional[str] = None) -> Dict[str, Any]:
+    """Normalize arbitrary event or agent dictionary into a canonical agent representation."""
+    host = raw.get("host") or raw.get("hostname") or get_default_hostname(local_hostname)
+    workspace = raw.get("workspace") or raw.get("workspace_name") or "default"
+    pane_id = raw.get("pane_id") or raw.get("paneId") or raw.get("pane") or raw.get("id") or "0"
+
+    # If raw id was composite (host:workspace:pane_id), unpack it
+    if ":" in str(pane_id) and not raw.get("host") and not raw.get("workspace"):
+        host, workspace, pane_id = parse_agent_id(str(pane_id))
+
+    agent_id = build_agent_id(host, workspace, pane_id)
+
+    agent_obj = raw.get("agent") if isinstance(raw.get("agent"), dict) else {}
+    # herdr's own `agent list`/`agent get` envelope uses the bare key "agent" for the
+    # harness label (e.g. "claude", "cline") on a *string*, not a nested dict -- only
+    # treat it as metadata when it actually is one.
+    raw_agent_field = raw.get("agent")
+    raw_status = (
+        raw.get("status")
+        or raw.get("agent_status")
+        or raw.get("state")
+        or agent_obj.get("status")
+    )
+    status = normalize_status(raw_status)
+
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    updated_at = raw.get("updated_at") or raw.get("timestamp") or raw.get("ts") or now_iso
+
+    quota = raw.get("quota") if isinstance(raw.get("quota"), dict) else None
+
+    return {
+        "id": agent_id,
+        "host": str(host),
+        "workspace": str(workspace),
+        "tab": raw.get("tab") or raw.get("tab_name") or raw.get("tab_id") or "",
+        "pane_id": str(pane_id),
+        "status": status,
+        "status_reason": str(raw.get("status_reason") or raw.get("reason") or raw.get("message") or ""),
+        "agent_name": str(raw.get("agent_name") or raw.get("name") or "herdr-agent"),
+        "tool_call": str(raw.get("tool_call") or raw.get("action") or ""),
+        "last_message": str(raw.get("last_message") or raw.get("prompt") or ""),
+        "last_output": str(raw.get("last_output") or raw.get("output") or ""),
+        "pid": raw.get("pid"),
+        "updated_at": updated_at,
+        "metadata": raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {},
+        # --- Identity: who is running this agent and on what ---
+        "cwd": str(raw.get("cwd") or raw.get("foreground_cwd") or ""),
+        "harness": str(
+            raw.get("harness")
+            or (raw_agent_field if isinstance(raw_agent_field, str) else "")
+            or ""
+        ),
+        "harness_version": str(raw.get("harness_version") or ""),
+        "model": str(raw.get("model") or ""),
+        "task_title": str(raw.get("task_title") or raw.get("terminal_title_stripped") or raw.get("terminal_title") or ""),
+        "git_repo": str(raw.get("git_repo") or ""),
+        "git_branch": str(raw.get("git_branch") or ""),
+        "git_dirty": bool(raw.get("git_dirty")) if raw.get("git_dirty") is not None else None,
+        # --- Runway: how much rope is left, from whichever honest source the harness offers ---
+        "context_used": raw.get("context_used") if isinstance(raw.get("context_used"), (int, float)) else None,
+        "context_limit": raw.get("context_limit") if isinstance(raw.get("context_limit"), (int, float)) else None,
+        "quota": quota,
+        "cost_usd": raw.get("cost_usd") if isinstance(raw.get("cost_usd"), (int, float)) else None,
+    }
+
+
+def agent_update_message(event: Dict[str, Any], local_hostname: Optional[str] = None) -> Dict[str, Any]:
+    """Convert an incoming raw event into a standard WebSocket agent_update message."""
+    # Handle wrapped event payload
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else event
+    if "agent" in payload and isinstance(payload["agent"], dict):
+        base_dict = {**payload, **payload["agent"]}
+    else:
+        base_dict = payload
+
+    normalized = normalize_agent_dict(base_dict, local_hostname=local_hostname)
+    return {
+        "type": "agent_update",
+        "agent": normalized,
+    }
+
+
+def complete_agent_update_message(
+    event: Dict[str, Any],
+    current: Optional[Dict[str, Dict[str, Any]]] = None,
+    local_hostname: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Generate a complete agent update message merging new event data with current state."""
+    raw_payload = event.get("payload") if isinstance(event.get("payload"), dict) else event
+    partial = normalize_agent_dict(
+        raw_payload,
+        local_hostname=local_hostname,
+    )
+    agent_id = partial["id"]
+
+    if current and agent_id in current:
+        merged = dict(current[agent_id])
+        # Fields with more than one accepted raw key: merge when ANY alias was
+        # explicitly supplied, mirroring the alias fan-in in normalize_agent_dict.
+        aliases = {
+            "agent_name": ("name", "agent_name"),
+            "cwd": ("cwd", "foreground_cwd"),
+            "harness": ("harness", "agent"),
+            "task_title": ("task_title", "terminal_title_stripped", "terminal_title"),
+            "status_reason": ("status_reason", "reason", "message"),
+        }
+        mergeable_extra = (
+            "status_reason", "tool_call", "last_message", "last_output", "tab", "pid", "metadata",
+            "cwd", "harness", "harness_version", "model", "task_title",
+            "git_repo", "git_branch", "git_dirty",
+            "context_used", "context_limit", "quota", "cost_usd",
+        )
+        # Merge only explicitly supplied fields or valid non-default updates
+        for k, v in partial.items():
+            if k in ("id", "host", "workspace", "pane_id"):
+                continue
+            supplied = any(a in raw_payload for a in aliases[k]) if k in aliases else (k in raw_payload)
+            if supplied:
+                merged[k] = v
+            elif k in mergeable_extra and k in raw_payload:
+                merged[k] = v
+        # Status update
+        if partial.get("status") and partial["status"] != "unknown":
+            merged["status"] = partial["status"]
+        merged["updated_at"] = partial.get("updated_at") or merged.get("updated_at")
+        merged["id"] = agent_id
+    else:
+        merged = partial
+
+    return {
+        "type": "agent_update",
+        "agent": merged,
+    }
+
+
+def apply_agent_message(
+    current: Dict[str, Dict[str, Any]],
+    message: Dict[str, Any],
+) -> Dict[str, Dict[str, Any]]:
+    """Apply an agent message (agent_update, agents_snapshot, agent_removed) to state dict in-place."""
+    msg_type = message.get("type")
+
+    if msg_type == "agents_snapshot":
+        agents = message.get("agents")
+        if isinstance(agents, list):
+            current.clear()
+            for ag in agents:
+                if isinstance(ag, dict):
+                    norm = normalize_agent_dict(ag)
+                    current[norm["id"]] = norm
+        elif isinstance(agents, dict):
+            current.clear()
+            for key, ag in agents.items():
+                if isinstance(ag, dict):
+                    norm = normalize_agent_dict(ag)
+                    current[norm["id"]] = norm
+
+    elif msg_type == "agent_update":
+        agent_data = message.get("agent")
+        if isinstance(agent_data, dict):
+            norm = normalize_agent_dict(agent_data)
+            agent_id = norm["id"]
+            if agent_id in current:
+                current[agent_id].update(norm)
+            else:
+                current[agent_id] = norm
+
+    elif msg_type in ("agent_removed", "agent_deleted", "pane_closed"):
+        agent_id = message.get("agent_id") or message.get("id")
+        if agent_id and agent_id in current:
+            del current[agent_id]
+        elif message.get("pane_id"):
+            # Find and delete matching pane_id
+            p_id = str(message.get("pane_id"))
+            to_del = [k for k, v in current.items() if str(v.get("pane_id")) == p_id]
+            for k in to_del:
+                del current[k]
+
+    return current
+
+
+def agents_snapshot_message(current: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Build an agents_snapshot message payload from current state dictionary."""
+    return {
+        "type": "agents_snapshot",
+        "agents": list(current.values()),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }

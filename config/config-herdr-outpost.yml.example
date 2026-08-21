@@ -1,0 +1,48 @@
+# ==============================================================================
+# Cloudflare Tunnel Configuration Template: herdr-outpost
+# ==============================================================================
+# Save this file to ~/.cloudflared/config-herdr-outpost.yml (or ~/.cloudflared/config.yml)
+# Replace TUNNEL_ID with your tunnel UUID and adjust paths for your OS.
+#
+# Create tunnel:
+#   cloudflared tunnel create herdr-outpost
+#
+# Route DNS entries:
+#   cloudflared tunnel route dns herdr-outpost relay.example.com
+#
+# The web dashboard (herdr.example.com) is served directly by Cloudflare
+# Workers via its own custom domain, NOT through this tunnel -- Workers
+# already terminates TLS and serves the static assets globally, so proxying
+# it through a laptop-hosted tunnel would just add a failure point and take
+# the dashboard down whenever this tunnel isn't running.
+#
+# Run tunnel:
+#   cloudflared tunnel --config ~/.cloudflared/config-herdr-outpost.yml run herdr-outpost
+# ==============================================================================
+
+tunnel: herdr-outpost
+
+# Path to your Cloudflare Tunnel credentials JSON file.
+# OS-specific default paths:
+# Linux:   /home/YOUR_USERNAME/.cloudflared/TUNNEL_ID.json
+# macOS:   /Users/YOUR_USERNAME/.cloudflared/TUNNEL_ID.json
+# Windows: C:\Users\YOUR_USERNAME\.cloudflared\TUNNEL_ID.json
+credentials-file: /home/YOUR_USERNAME/.cloudflared/TUNNEL_ID.json
+
+ingress:
+  # ----------------------------------------------------------------------------
+  # 1. Relay Gateway (WebSocket + HTTP Webhook Ingress)
+  # ----------------------------------------------------------------------------
+  # Routes relay.example.com to the local herdr-outpost daemon on port 8375
+  - hostname: relay.example.com
+    service: http://localhost:8375
+    originRequest:
+      http2Origin: false
+      disableChunkedEncoding: false
+      connectTimeout: 30s
+      noHappyEyeballs: false
+
+  # ----------------------------------------------------------------------------
+  # 2. Catch-all fallback rule
+  # ----------------------------------------------------------------------------
+  - service: http_status:404

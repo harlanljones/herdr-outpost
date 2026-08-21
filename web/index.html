@@ -1,0 +1,3611 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>herdr-outpost — Annunciator Control Panel</title>
+  <meta name="description" content="Remote dashboard and relay gateway for Herdr AI coding agent terminal manager" />
+  <meta name="theme-color" content="#12151b" id="meta-theme-color" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" type="image/svg+xml" href="logo.svg" />
+  <link rel="apple-touch-icon" href="logo.svg" />
+  <link rel="manifest" href="manifest.json" />
+
+  <style>
+    /* ==========================================================================
+       1. Design Tokens & Industrial Annunciator System
+       ========================================================================== */
+    :root {
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", Menlo, Monaco, Consolas, monospace;
+
+      /* Dark Annunciator Theme (Default Ground) */
+      --bg-panel: #12151b;
+      --bg-surface: #191e27;
+      --bg-surface-raised: #212835;
+      --bg-surface-hover: #293242;
+      --border-default: #2c3647;
+      --border-strong: #3f4d65;
+      --border-subtle: #1e2531;
+
+      --text-main: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --text-inverse: #0f172a;
+
+      --accent-primary: #38bdf8;
+      --accent-hover: #0ea5e9;
+
+      /* Annunciator Status Plates (Audited WCAG AA Contrast) */
+      --status-alarm-bg: #2d1808;
+      --status-alarm-border: #f59e0b;
+      --status-alarm-text: #fbbf24;
+      --status-alarm-dot: #f59e0b;
+
+      --status-working-bg: #07251a;
+      --status-working-border: #10b981;
+      --status-working-text: #34d399;
+      --status-working-dot: #10b981;
+
+      --status-done-bg: #0c1e30;
+      --status-done-border: #38bdf8;
+      --status-done-text: #7dd3fc;
+      --status-done-dot: #38bdf8;
+
+      --status-idle-bg: #1a202c;
+      --status-idle-border: #475569;
+      --status-idle-text: #94a3b8;
+      --status-idle-dot: #64748b;
+
+      --terminal-bg: #090c12;
+      --terminal-fg: #f1f5f9;
+
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+      --radius-full: 9999px;
+
+      --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.4);
+      --transition-fast: 0.15s ease;
+      --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-panel: #edf1f7;
+        --bg-surface: #ffffff;
+        --bg-surface-raised: #f6f8fb;
+        --bg-surface-hover: #eceff5;
+        --border-default: #cfd8e3;
+        --border-strong: #94a3b8;
+        --border-subtle: #e2e8f0;
+
+        --text-main: #0f172a;
+        --text-secondary: #334155;
+        --text-muted: #64748b;
+        --text-inverse: #ffffff;
+
+        --status-alarm-bg: #fef3c7;
+        --status-alarm-border: #d97706;
+        --status-alarm-text: #92400e;
+        --status-alarm-dot: #d97706;
+
+        --status-working-bg: #d1fae5;
+        --status-working-border: #059669;
+        --status-working-text: #065f46;
+        --status-working-dot: #059669;
+
+        --status-done-bg: #e0f2fe;
+        --status-done-border: #0284c7;
+        --status-done-text: #075985;
+        --status-done-dot: #0284c7;
+
+        --status-idle-bg: #f1f5f9;
+        --status-idle-border: #94a3b8;
+        --status-idle-text: #475569;
+        --status-idle-dot: #64748b;
+
+        --terminal-bg: #0f172a;
+        --terminal-fg: #f8fafc;
+
+        --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.06);
+        --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+    }
+
+    /* Explicit JS Theme Overrides */
+    html.light {
+      --bg-panel: #edf1f7;
+      --bg-surface: #ffffff;
+      --bg-surface-raised: #f6f8fb;
+      --bg-surface-hover: #eceff5;
+      --border-default: #cfd8e3;
+      --border-strong: #94a3b8;
+      --border-subtle: #e2e8f0;
+
+      --text-main: #0f172a;
+      --text-secondary: #334155;
+      --text-muted: #64748b;
+      --text-inverse: #ffffff;
+
+      --status-alarm-bg: #fef3c7;
+      --status-alarm-border: #d97706;
+      --status-alarm-text: #92400e;
+      --status-alarm-dot: #d97706;
+
+      --status-working-bg: #d1fae5;
+      --status-working-border: #059669;
+      --status-working-text: #065f46;
+      --status-working-dot: #059669;
+
+      --status-done-bg: #e0f2fe;
+      --status-done-border: #0284c7;
+      --status-done-text: #075985;
+      --status-done-dot: #0284c7;
+
+      --status-idle-bg: #f1f5f9;
+      --status-idle-border: #94a3b8;
+      --status-idle-text: #475569;
+      --status-idle-dot: #64748b;
+
+      --terminal-bg: #0f172a;
+      --terminal-fg: #f8fafc;
+
+      --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.06);
+      --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    html.dark {
+      --bg-panel: #12151b;
+      --bg-surface: #191e27;
+      --bg-surface-raised: #212835;
+      --bg-surface-hover: #293242;
+      --border-default: #2c3647;
+      --border-strong: #3f4d65;
+      --border-subtle: #1e2531;
+
+      --text-main: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --text-inverse: #0f172a;
+
+      --status-alarm-bg: #2d1808;
+      --status-alarm-border: #f59e0b;
+      --status-alarm-text: #fbbf24;
+      --status-alarm-dot: #f59e0b;
+
+      --status-working-bg: #07251a;
+      --status-working-border: #10b981;
+      --status-working-text: #34d399;
+      --status-working-dot: #10b981;
+
+      --status-done-bg: #0c1e30;
+      --status-done-border: #38bdf8;
+      --status-done-text: #7dd3fc;
+      --status-done-dot: #38bdf8;
+
+      --status-idle-bg: #1a202c;
+      --status-idle-border: #475569;
+      --status-idle-text: #94a3b8;
+      --status-idle-dot: #64748b;
+
+      --terminal-bg: #090c12;
+      --terminal-fg: #f1f5f9;
+
+      --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    /* ==========================================================================
+       2. Base & Typography Standards
+       ========================================================================== */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) var(--bg-panel);
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-panel);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: var(--radius-sm);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    ::selection {
+      background-color: var(--accent-primary);
+      color: var(--text-inverse);
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-panel);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+      font-size: 16px;
+      overflow-x: hidden;
+      font-variant-numeric: tabular-nums;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent-primary);
+      outline-offset: 2px;
+    }
+
+    /* Silkscreen / Annunciator Plate Labels */
+    .plate-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      user-select: none;
+    }
+
+    /* Interactive Floor Standards (44px min tap targets) */
+    button, input, select, .action-btn, .filter-pill, .icon-btn, .quick-chip, .preset-chip {
+      min-height: 44px;
+      font-family: inherit;
+      touch-action: manipulation;
+    }
+
+    @media (pointer: coarse) {
+      button, input, .key-btn, .filter-pill, .icon-btn, .quick-chip {
+        min-height: 48px;
+      }
+    }
+
+    /* ==========================================================================
+       3. Motion, Contrast & Accessibility
+       ========================================================================== */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .heartbeat-dot {
+        animation: none !important;
+      }
+      .alarm-card-flashing {
+        animation: none !important;
+        border-width: 2px !important;
+      }
+      .hinge-container {
+        transition: none !important;
+        transform: none !important;
+      }
+      .runway-bar-fill {
+        transition: none !important;
+      }
+    }
+
+    @media (prefers-contrast: more) {
+      :root {
+        --border-default: #475569;
+        --border-strong: #94a3b8;
+        --text-secondary: #cbd5e1;
+      }
+      .filter-pill, .icon-btn, .agent-row, .repo-zone {
+        border-width: 2px !important;
+      }
+    }
+
+    /* Offline Alert Strip */
+    .offline-banner {
+      background: #7f1d1d;
+      color: #fef2f2;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.45rem 1rem;
+      text-align: center;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid #991b1b;
+      z-index: 45;
+    }
+    .offline-banner.visible {
+      display: flex;
+    }
+
+    /* ==========================================================================
+       4. App Header & Rhythm Heartbeat
+       ========================================================================== */
+    header.app-header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background-color: var(--bg-surface);
+      border-bottom: 1px solid var(--border-default);
+      box-shadow: var(--shadow-panel);
+      padding: 0.6rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      text-decoration: none;
+      color: inherit;
+    }
+    .brand-logo {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+    .brand-title-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 480px) {
+      .brand-title {
+        font-size: 16px;
+      }
+      .brand-badge {
+        display: none;
+      }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Rhythm Machine Heartbeat & Connection Pill */
+    .connection-status-plate {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.3rem 0.65rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      user-select: none;
+      min-height: 44px;
+    }
+    .connection-status-plate:hover {
+      border-color: var(--border-strong);
+    }
+    .heartbeat-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--status-idle-dot);
+      flex-shrink: 0;
+    }
+    .connection-status-plate.connected .heartbeat-dot {
+      background-color: var(--status-working-dot);
+      animation: heartbeat-tick 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    .connection-status-plate.connecting .heartbeat-dot {
+      background-color: var(--status-alarm-dot);
+      animation: blink-tick 0.8s infinite;
+    }
+    .connection-status-plate.error .heartbeat-dot {
+      background-color: #ef4444;
+    }
+    .connection-text {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+    }
+
+    @keyframes heartbeat-tick {
+      0%, 100% { opacity: 0.85; transform: scale(1); }
+      10% { opacity: 1; transform: scale(1.25); }
+      20% { opacity: 0.85; transform: scale(1); }
+    }
+    @keyframes blink-tick {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+
+    /* Icon Buttons */
+    .icon-btn {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      color: var(--text-secondary);
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-sm);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color var(--transition-fast), color var(--transition-fast);
+      flex-shrink: 0;
+    }
+    .icon-btn:hover {
+      color: var(--text-main);
+      border-color: var(--border-strong);
+      background: var(--bg-surface-raised);
+    }
+    .icon-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* ==========================================================================
+       5. Main Layout & Controls Bar
+       ========================================================================== */
+    .app-viewport {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+    }
+
+    main.main-content {
+      flex: 1;
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1rem 1rem 3rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      overflow-y: auto;
+    }
+
+    /* Controls Bar: Search & Status Filters */
+    .controls-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      padding: 0.75rem;
+      box-shadow: var(--shadow-panel);
+    }
+
+    @media (min-width: 768px) {
+      .controls-bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      max-width: 480px;
+    }
+    .search-box input {
+      width: 100%;
+      padding: 0.6rem 0.85rem 0.6rem 2.4rem;
+      font-size: 16px; /* iOS auto-zoom prevention floor */
+      font-family: inherit;
+      background: var(--bg-panel);
+      color: var(--text-main);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      outline: none;
+      min-height: 44px;
+    }
+    .search-box input:focus {
+      border-color: var(--accent-primary);
+    }
+    .search-box svg {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .filter-pills-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .filter-pills-row::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filter-pill {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0.4rem 0.85rem;
+      border-radius: var(--radius-sm);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      min-height: 44px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .filter-pill:hover {
+      color: var(--text-main);
+      border-color: var(--border-strong);
+    }
+    .filter-pill.active {
+      background: var(--text-main);
+      color: var(--bg-panel);
+      border-color: var(--text-main);
+    }
+    .filter-count {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      padding: 0.1rem 0.35rem;
+      border-radius: var(--radius-sm);
+      background: var(--bg-surface-raised);
+      color: var(--text-secondary);
+    }
+    .filter-pill.active .filter-count {
+      background: rgba(125, 125, 125, 0.25);
+      color: var(--bg-panel);
+    }
+    .filter-pill.blocked-pill.has-blocked {
+      border-color: var(--status-alarm-border);
+      color: var(--status-alarm-text);
+      background: var(--status-alarm-bg);
+    }
+    .filter-pill.blocked-pill.has-blocked .filter-count {
+      background: var(--status-alarm-border);
+      color: #000000;
+      font-weight: 800;
+    }
+
+    /* ==========================================================================
+       6. First Viewport: ALARM Section (Mobile glance & Desktop callout)
+       ========================================================================== */
+    .alarm-strip {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      background: var(--status-alarm-bg);
+      border: 1px solid var(--status-alarm-border);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      box-shadow: var(--shadow-panel);
+    }
+    .alarm-strip-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+      padding-bottom: 0.5rem;
+    }
+    .alarm-strip-title {
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--status-alarm-text);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: var(--font-mono);
+    }
+    .alarm-strip-badge {
+      font-size: 12px;
+      font-weight: 800;
+      background: var(--status-alarm-border);
+      color: #000000;
+      padding: 0.1rem 0.4rem;
+      border-radius: var(--radius-sm);
+    }
+
+    .alarm-cards-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    /* ==========================================================================
+       7. Repo-Grouped Fleet Sections & Density Scaling
+       ========================================================================== */
+    .fleet-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .repo-zone {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-panel);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ASCII Density Scaling */
+    .repo-zone.density-high {
+      border-color: var(--border-strong);
+    }
+    .repo-zone.has-alarm {
+      border-color: var(--status-alarm-border);
+    }
+
+    .repo-zone-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: var(--bg-surface-raised);
+      border-bottom: 1px solid var(--border-default);
+      padding: 0.65rem 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .repo-identity {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 0;
+    }
+    .repo-name {
+      font-size: 16px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .repo-branch {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      background: var(--bg-panel);
+      padding: 0.15rem 0.45rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-default);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      white-space: nowrap;
+    }
+    .repo-dirty-flag {
+      color: var(--status-alarm-text);
+      font-weight: bold;
+    }
+    .repo-count-badge {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .repo-agent-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ==========================================================================
+       8. Annunciator Agent Row (3-Line Standard + Hinge Expansion)
+       ========================================================================== */
+    .agent-row {
+      border-bottom: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      display: flex;
+      flex-direction: column;
+      transition: background-color var(--transition-fast);
+      position: relative;
+    }
+    .agent-row:last-child {
+      border-bottom: none;
+    }
+    .agent-row:hover {
+      background: var(--bg-surface-hover);
+    }
+
+    .agent-row.status-blocked {
+      background: var(--status-alarm-bg);
+    }
+    .agent-row.status-blocked:hover {
+      background: #361e0b;
+    }
+
+    .agent-row-main {
+      padding: 0.75rem 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      cursor: pointer;
+    }
+
+    /* Line 1: Identity (Harness + Model) & Annunciator Status Plate */
+    .agent-line-1 {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.4rem;
+    }
+    .agent-harness-model {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem;
+      min-width: 0;
+    }
+    .harness-tag {
+      font-size: 12px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--bg-panel);
+      padding: 0.15rem 0.4rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-default);
+      color: var(--accent-primary);
+      white-space: nowrap;
+    }
+    .model-tag {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .host-tag {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      background: var(--bg-panel);
+      padding: 0.1rem 0.3rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-default);
+    }
+
+    /* Status Plate Annunciator Badges (Glyph + Label) */
+    .status-plate {
+      font-size: 12px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-sm);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-shrink: 0;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+    .status-plate.blocked {
+      background: var(--status-alarm-bg);
+      border-color: var(--status-alarm-border);
+      color: var(--status-alarm-text);
+    }
+    .status-plate.working {
+      background: var(--status-working-bg);
+      border-color: var(--status-working-border);
+      color: var(--status-working-text);
+    }
+    .status-plate.done {
+      background: var(--status-done-bg);
+      border-color: var(--status-done-border);
+      color: var(--status-done-text);
+    }
+    .status-plate.idle {
+      background: var(--status-idle-bg);
+      border-color: var(--status-idle-border);
+      color: var(--status-idle-text);
+    }
+    .status-plate.unknown {
+      background: var(--bg-panel);
+      border-color: var(--border-default);
+      color: var(--text-muted);
+    }
+
+    /* Line 2: Task Title (Clamped to 2 lines) */
+    .agent-line-2 {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+    }
+    .agent-row.status-blocked .agent-line-2 {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    /* Line 3: Runway Meter (Honest Meter) + Relative Time */
+    .agent-line-3 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      padding-top: 0.1rem;
+    }
+
+    .runway-meter-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex: 1;
+      max-width: 320px;
+    }
+    .runway-bar-bg {
+      flex: 1;
+      height: 4px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .runway-bar-fill {
+      height: 100%;
+      width: 100%;
+      transform-origin: left center;
+      transform: scaleX(0);
+      background: var(--accent-primary);
+      transition: transform var(--transition-normal);
+      will-change: transform;
+    }
+    .runway-bar-fill.warn {
+      background: var(--status-alarm-border);
+    }
+    .runway-text {
+      white-space: nowrap;
+    }
+    .agent-time-ago {
+      white-space: nowrap;
+      margin-left: auto;
+    }
+
+    /* ==========================================================================
+       9. Tactile Hinge Expansion (Sneaker-Box Raise #5)
+       ========================================================================== */
+    .hinge-container {
+      display: none;
+      padding: 0.75rem 0.9rem 0.9rem;
+      background: var(--bg-surface-raised);
+      border-top: 1px solid var(--border-default);
+      transform-origin: top center;
+      animation: hinge-drop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+    }
+    .hinge-container.open {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    @keyframes hinge-drop {
+      0% {
+        opacity: 0;
+        transform: perspective(600px) rotateX(-12deg) translateY(-4px);
+      }
+      100% {
+        opacity: 1;
+        transform: perspective(600px) rotateX(0deg) translateY(0);
+      }
+    }
+
+    .hinge-reason-box {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--bg-panel);
+      padding: 0.6rem 0.75rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-default);
+      color: var(--text-main);
+      word-break: break-word;
+    }
+
+    .hinge-actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* Action Buttons (Strict Contrast Standards) */
+    .btn-approve {
+      background: #059669;
+      color: #ffffff;
+      border: 1px solid #047857;
+      border-radius: var(--radius-sm);
+      padding: 0.4rem 0.85rem;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      min-height: 44px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .btn-approve:hover {
+      background: #047857;
+    }
+
+    .btn-reject {
+      background: #b91c1c;
+      color: #ffffff;
+      border: 1px solid #991b1b;
+      border-radius: var(--radius-sm);
+      padding: 0.4rem 0.85rem;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      min-height: 44px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .btn-reject:hover {
+      background: #991b1b;
+    }
+
+    .btn-open-terminal {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      color: var(--text-secondary);
+      border-radius: var(--radius-sm);
+      padding: 0.4rem 0.75rem;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      min-height: 44px;
+      margin-left: auto;
+    }
+    .btn-open-terminal:hover {
+      color: var(--text-main);
+      border-color: var(--border-strong);
+    }
+
+    .quick-chip {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0.35rem 0.65rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .quick-chip:hover {
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+
+    /* ==========================================================================
+       10. Terminal Sheet / Persistent Desktop Side Panel
+       ========================================================================== */
+    .terminal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-normal);
+    }
+    .terminal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .terminal-sheet {
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border-strong);
+      box-shadow: var(--shadow-elevated);
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform var(--transition-normal);
+      max-width: 100vw;
+    }
+    .terminal-backdrop.open .terminal-sheet {
+      transform: translateX(0);
+    }
+
+    @media (min-width: 1024px) {
+      .terminal-sheet {
+        max-width: 620px;
+      }
+    }
+
+    .terminal-sheet-header {
+      padding: 0.75rem 1rem;
+      background: var(--bg-surface-raised);
+      border-bottom: 1px solid var(--border-default);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+    .terminal-sheet-title-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 0;
+    }
+    .terminal-sheet-title {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Collapsible Telemetry Detail Block */
+    .telemetry-drawer {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-default);
+      padding: 0.6rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.4rem 0.8rem;
+      max-height: 140px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .telemetry-item {
+      display: flex;
+      gap: 0.35rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .telemetry-key {
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .telemetry-val {
+      color: var(--text-main);
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Terminal Console Screen */
+    .terminal-console-wrap {
+      flex: 1;
+      background: var(--terminal-bg);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      min-height: 200px;
+    }
+
+    .terminal-toolbar {
+      padding: 0.35rem 0.75rem;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .terminal-toolbar-tools {
+      display: flex;
+      gap: 0.35rem;
+    }
+    .tool-btn {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-family: var(--font-mono);
+      padding: 0.2rem 0.5rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .tool-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+    }
+    .tool-btn.active {
+      background: var(--accent-primary);
+      color: #000000;
+      border-color: var(--accent-primary);
+      font-weight: 700;
+    }
+
+    .terminal-screen {
+      flex: 1;
+      padding: 0.85rem;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 16px;
+      line-height: 1.45;
+      color: var(--terminal-fg);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .terminal-screen::-webkit-scrollbar {
+      width: 6px;
+    }
+    .terminal-screen::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 3px;
+    }
+
+    /* Modal Blocked Banner */
+    .sheet-blocked-banner {
+      background: var(--status-alarm-bg);
+      border-top: 1px solid var(--status-alarm-border);
+      border-bottom: 1px solid var(--status-alarm-border);
+      padding: 0.75rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    /* Quick Keys Row & Bottom Input Bar */
+    .sheet-interactive-bar {
+      padding: 0.75rem 1rem;
+      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border-default);
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      flex-shrink: 0;
+    }
+
+    .quick-keys-row {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .quick-keys-row::-webkit-scrollbar {
+      display: none;
+    }
+    .key-btn {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0.3rem 0.6rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      white-space: nowrap;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .key-btn:hover {
+      border-color: var(--border-strong);
+      color: var(--text-main);
+    }
+    .key-btn.danger {
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    .key-btn.danger:hover {
+      background: #b91c1c;
+      color: #ffffff;
+    }
+
+    .prompt-input-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .prompt-input {
+      flex: 1;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      padding: 0.65rem 0.85rem;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 16px; /* 16px floor to prevent iOS zoom */
+      outline: none;
+      min-height: 44px;
+    }
+    .prompt-input:focus {
+      border-color: var(--accent-primary);
+    }
+    .send-btn {
+      background: var(--accent-primary);
+      color: #000000;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 0.65rem 1rem;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      min-height: 44px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .send-btn:hover {
+      background: var(--accent-hover);
+    }
+
+    /* ==========================================================================
+       11. Settings Sheet / QR Pairing Modal
+       ========================================================================== */
+    .settings-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-normal);
+    }
+    .settings-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .settings-window {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-elevated);
+      width: 100%;
+      max-width: 520px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .settings-header {
+      padding: 0.85rem 1.1rem;
+      background: var(--bg-surface-raised);
+      border-bottom: 1px solid var(--border-default);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .settings-title {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .settings-body {
+      padding: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+      overflow-y: auto;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .form-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+    }
+    .form-input {
+      width: 100%;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      padding: 0.65rem 0.85rem;
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      font-size: 16px;
+      outline: none;
+      min-height: 44px;
+    }
+    .form-input:focus {
+      border-color: var(--accent-primary);
+    }
+    .input-with-button {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .preset-chips {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      margin-top: 0.25rem;
+    }
+    .preset-chip {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      padding: 0.2rem 0.5rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      color: var(--accent-primary);
+      cursor: pointer;
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .preset-chip:hover {
+      border-color: var(--accent-primary);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+    }
+    .toggle-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .toggle-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .toggle-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Switch Component */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--border-strong);
+      border: 1px solid var(--border-default);
+      transition: .25s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 2px;
+      bottom: 2px;
+      background-color: #ffffff;
+      transition: .25s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: var(--accent-primary);
+      border-color: var(--accent-primary);
+    }
+    input:checked + .slider:before {
+      transform: translateX(20px);
+      background-color: #000000;
+    }
+
+    /* ==========================================================================
+       12. Empty States & Toast
+       ========================================================================== */
+    .empty-state {
+      text-align: center;
+      padding: 3.5rem 1.5rem;
+      background: var(--bg-surface);
+      border: 1px dashed var(--border-default);
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      max-width: 480px;
+      margin: 2rem auto;
+      box-shadow: var(--shadow-panel);
+    }
+    .empty-icon {
+      width: 44px;
+      height: 44px;
+      color: var(--text-muted);
+    }
+    .empty-title {
+      font-size: 24px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .empty-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-strong);
+      box-shadow: var(--shadow-elevated);
+      color: var(--text-main);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      pointer-events: auto;
+    }
+
+    /* ==========================================================================
+       13. ANSI Colors Styling
+       ========================================================================== */
+    .ansi-black { color: #4b5563; }
+    .ansi-red { color: #f87171; }
+    .ansi-green { color: #4ade80; }
+    .ansi-yellow { color: #facc15; }
+    .ansi-blue { color: #60a5fa; }
+    .ansi-magenta { color: #c084fc; }
+    .ansi-cyan { color: #38bdf8; }
+    .ansi-white { color: #f3f4f6; }
+    .ansi-bright-black { color: #6b7280; }
+    .ansi-bright-red { color: #ef4444; }
+    .ansi-bright-green { color: #22c55e; }
+    .ansi-bright-yellow { color: #eab308; }
+    .ansi-bright-blue { color: #3b82f6; }
+    .ansi-bright-magenta { color: #a855f7; }
+    .ansi-bright-cyan { color: #06b6d4; }
+    .ansi-bright-white { color: #ffffff; }
+    .ansi-bold { font-weight: 700; }
+    .ansi-dim { opacity: 0.6; }
+    .ansi-italic { font-style: italic; }
+    .ansi-underline { text-decoration: underline; }
+
+    /* ==========================================================================
+       14. Footer
+       ========================================================================== */
+    footer.app-footer {
+      border-top: 1px solid var(--border-default);
+      background: var(--bg-surface);
+      padding: 0.9rem 1.25rem;
+      text-align: center;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+    footer a {
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+    footer a:hover {
+      color: var(--accent-primary);
+    }
+  </style>
+</head>
+<body>
+<!--
+THESIS: Annunciator control panel: quiet while agents work, demanding attention the instant one is blocked.
+OWN-WORLD: Graphite ground, silkscreen plate headers, lit vs unlit state tiles (amber=alarm, green=working, pale=idle, blue=done). Tabular numerals, narrow accent bands.
+RAISES: 1. Flat hard-edged panels with raking 1px borders, zero glass. 2. Rhythm heartbeat dot for live socket freshness. 3. ASCII visual weight scales with zone density. 4. Amber hue confined strictly to alarm border/indicator. 5. Hinge transform when expanding blocked row for inline reply.
+FIRST VIEWPORT: Mobile top ALARM strip for instant unblock, followed by repo zones with sticky headers (repo · branch) and sorted agent rows (blocked > working > idle > done).
+FORM: Annunciator panel information architecture and alarm state language (quiet/alarm/ack/clear).
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
+-->
+
+<!-- Offline Alert Banner -->
+  <div id="offlineBanner" class="offline-banner" role="alert">
+    <span>⚠ Network Connection Offline — Reconnecting automatically when network is restored</span>
+  </div>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <a href="./" class="brand-group" aria-label="herdr-outpost home">
+      <img src="logo.svg" alt="herdr-outpost mark" class="brand-logo" />
+      <div class="brand-title-wrap">
+        <span class="brand-title">
+          herdr-outpost
+          <span class="brand-badge">Operate</span>
+        </span>
+      </div>
+    </a>
+
+    <div class="header-actions">
+      <!-- Rhythm Machine Heartbeat & Connection State -->
+      <div id="connectionPill" class="connection-status-plate disconnected" title="Click to view connection settings" role="button" tabindex="0" aria-label="Relay Connection Status">
+        <span class="heartbeat-dot"></span>
+        <span id="connectionStatusText" class="connection-text">Connecting...</span>
+      </div>
+
+      <!-- Theme Switcher -->
+      <button id="themeToggleBtn" class="icon-btn" title="Toggle Theme" aria-label="Toggle Theme">
+        <svg id="moonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg id="sunIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      </button>
+
+      <!-- Settings / Pairing Button -->
+      <button id="settingsBtn" class="icon-btn" title="Open Settings & Pairing" aria-label="Open Settings & Pairing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Viewport Content -->
+  <div class="app-viewport">
+    <main class="main-content">
+      <!-- Controls Bar: Search & Status Filters -->
+      <div class="controls-bar">
+        <!-- Search Input -->
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="searchInput" placeholder="Search harness, model, repo, branch, task..." aria-label="Search agents" />
+        </div>
+
+        <!-- Status Filters (Thumb-height scrollable row) -->
+        <div class="filter-pills-row" id="statusFilterContainer" role="tablist" aria-label="Status Filters">
+          <button class="filter-pill active" data-status="all" role="tab" aria-selected="true">
+            All <span class="filter-count" id="countAll">0</span>
+          </button>
+          <button class="filter-pill blocked-pill" data-status="blocked" role="tab" aria-selected="false">
+            Blocked <span class="filter-count" id="countBlocked">0</span>
+          </button>
+          <button class="filter-pill" data-status="working" role="tab" aria-selected="false">
+            Working <span class="filter-count" id="countWorking">0</span>
+          </button>
+          <button class="filter-pill" data-status="done" role="tab" aria-selected="false">
+            Done <span class="filter-count" id="countDone">0</span>
+          </button>
+          <button class="filter-pill" data-status="idle" role="tab" aria-selected="false">
+            Idle <span class="filter-count" id="countIdle">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Priority ALARM Strip (First Viewport glance) -->
+      <section id="alarmStrip" class="alarm-strip" style="display:none;" aria-live="assertive" aria-label="Urgent Blocked Agents">
+        <div class="alarm-strip-header">
+          <div class="alarm-strip-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            ALARM: Action Required
+          </div>
+          <span class="alarm-strip-badge" id="alarmCountBadge">0 BLOCKED</span>
+        </div>
+        <div class="alarm-cards-container" id="alarmCardsContainer">
+          <!-- Dynamically Rendered Priority Alarms -->
+        </div>
+      </section>
+
+      <!-- Repo-Grouped Fleet Container -->
+      <section class="fleet-container" id="fleetContainer" aria-live="polite" aria-label="Agent Fleet Zones">
+        <!-- Dynamically Rendered Repo Zones & Rows -->
+      </section>
+
+      <!-- Empty State Container -->
+      <div id="emptyState" class="empty-state" style="display:none;" role="status" aria-live="polite">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+        <div class="empty-title" id="emptyTitle">No Active Agents</div>
+        <div class="empty-desc" id="emptyDesc">Waiting for herdr relay connection or no active agent sessions match your search query.</div>
+        <button id="emptyActionBtn" class="send-btn" style="margin-top:0.5rem;">Configure Relay</button>
+      </div>
+    </main>
+
+    <!-- Terminal Sheet / Side Panel (Tap-Through & Live Interaction) -->
+    <div id="terminalModal" class="terminal-backdrop" role="dialog" aria-modal="true" aria-label="Terminal Sheet">
+      <div class="terminal-sheet" id="modalWindow">
+        <!-- Sheet Header -->
+        <div class="terminal-sheet-header">
+          <div class="terminal-sheet-title-group">
+            <span id="modalStatusBadge" class="status-plate unknown">? UNKNOWN</span>
+            <h2 class="terminal-sheet-title" id="modalAgentName">agent-pane</h2>
+          </div>
+          <div style="display:flex; align-items:center; gap:0.4rem;">
+            <button id="toggleTelemetryBtn" class="tool-btn" title="Toggle Metadata Details">Details</button>
+            <button id="modalCloseBtn" class="icon-btn" title="Close Sheet (Esc)" aria-label="Close Sheet">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Telemetry Detail Block -->
+        <div class="telemetry-drawer" id="telemetryDrawer">
+          <div class="telemetry-item"><span class="telemetry-key">Harness:</span> <span class="telemetry-val" id="metaHarness">none</span></div>
+          <div class="telemetry-item"><span class="telemetry-key">Model:</span> <span class="telemetry-val" id="metaModel">none</span></div>
+          <div class="telemetry-item"><span class="telemetry-key">Repo:</span> <span class="telemetry-val" id="metaRepo">none</span></div>
+          <div class="telemetry-item"><span class="telemetry-key">Branch:</span> <span class="telemetry-val" id="metaBranch">none</span></div>
+          <div class="telemetry-item"><span class="telemetry-key">Runway:</span> <span class="telemetry-val" id="metaRunway">none</span></div>
+          <div class="telemetry-item"><span class="telemetry-key">Host:</span> <span class="telemetry-val" id="metaHost">local</span></div>
+          <div class="telemetry-item"><span class="telemetry-key">PID:</span> <span class="telemetry-val" id="metaPid">none</span></div>
+          <div class="telemetry-item"><span class="telemetry-key">Pane:</span> <span class="telemetry-val" id="metaPane">none</span></div>
+          <div class="telemetry-item" style="grid-column: 1 / -1;"><span class="telemetry-key">CWD:</span> <span class="telemetry-val" id="metaCwd">none</span></div>
+        </div>
+
+        <!-- Blocked Banner Inside Sheet -->
+        <div id="modalBlockedBanner" class="sheet-blocked-banner" style="display:none;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="font-size:12px; font-weight:800; text-transform:uppercase; color:var(--status-alarm-text); font-family:var(--font-mono);">
+              ▲ Awaiting User Approval
+            </div>
+          </div>
+          <div class="hinge-reason-box" id="modalBlockedReason">Awaiting prompt response...</div>
+          <div class="hinge-actions-row">
+            <button id="modalApproveBtn" class="btn-approve">✓ Approve</button>
+            <button id="modalRejectBtn" class="btn-reject">✕ Reject</button>
+            <button class="quick-chip" data-text="y">y</button>
+            <button class="quick-chip" data-text="yes">yes</button>
+            <button class="quick-chip" data-text="n">n</button>
+            <button class="quick-chip" data-text="always">always allow</button>
+          </div>
+        </div>
+
+        <!-- Live Terminal Console -->
+        <div class="terminal-console-wrap">
+          <div class="terminal-toolbar">
+            <span id="modalTaskPreview" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Terminal Output</span>
+            <div class="terminal-toolbar-tools">
+              <button id="autoscrollToggleBtn" class="tool-btn active" title="Toggle Autoscroll">Follow</button>
+              <button id="copyTerminalBtn" class="tool-btn" title="Copy Terminal Output">Copy</button>
+              <button id="clearTerminalBtn" class="tool-btn" title="Clear Screen">Clear</button>
+            </div>
+          </div>
+          <div id="terminalScreen" class="terminal-screen" role="log" aria-live="polite" aria-label="Terminal Live Output"></div>
+        </div>
+
+        <!-- Quick Keys Row & Command Input -->
+        <div class="sheet-interactive-bar">
+          <div class="quick-keys-row">
+            <button class="key-btn" data-key="Enter">↵ Enter</button>
+            <button class="key-btn" data-key="Escape">⎋ Esc</button>
+            <button class="key-btn danger" data-key="CtrlC">⌃C Interrupt</button>
+            <button class="key-btn" data-key="Space">␣ Space</button>
+            <button class="key-btn" data-key="Tab">⇥ Tab</button>
+            <button class="key-btn" data-key="Up">↑ Up</button>
+            <button class="key-btn" data-key="Down">↓ Down</button>
+          </div>
+
+          <div class="prompt-input-row">
+            <input type="text" id="promptInput" class="prompt-input" placeholder="Send keys or command to agent (Press Enter)..." aria-label="Agent terminal input" />
+            <button id="sendPromptBtn" class="send-btn">
+              <span>Send</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings & Device Pairing Sheet -->
+  <div id="settingsModal" class="settings-backdrop" role="dialog" aria-modal="true" aria-label="Settings & Pairing">
+    <div class="settings-window">
+      <div class="settings-header">
+        <h2 class="settings-title">Settings & Pairing</h2>
+        <button id="settingsCloseBtn" class="icon-btn" title="Close" aria-label="Close Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="settings-body">
+        <!-- Relay URL Form -->
+        <div class="form-group">
+          <label class="form-label" for="settingRelayUrl">Relay WebSocket URL</label>
+          <input type="text" id="settingRelayUrl" class="form-input" placeholder="wss://relay.example.com" />
+          <div class="preset-chips">
+            <button class="preset-chip" data-url="wss://relay.example.com">relay.example.com</button>
+            <button class="preset-chip" data-url="ws://127.0.0.1:8375">localhost:8375</button>
+          </div>
+        </div>
+
+        <!-- Auth Token -->
+        <div class="form-group">
+          <label class="form-label" for="settingRelayToken">Bearer Auth Token</label>
+          <div class="input-with-button">
+            <input type="password" id="settingRelayToken" class="form-input" placeholder="HERDR_OUTPOST_RELAY_TOKEN" />
+            <button id="toggleTokenVisibilityBtn" class="icon-btn" style="flex-shrink:0;" title="Show/Hide Token" aria-label="Show or Hide Token">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Pair a Device (QR) -->
+        <div class="form-group" id="pairingSection" style="display:none;">
+          <label class="form-label">Pair Mobile Device</label>
+          <div class="toggle-desc">Scan with your phone to connect and authenticate instantly:</div>
+          <div style="display:flex; justify-content:center; margin:0.6rem 0; background:#ffffff; padding:0.6rem; border-radius:var(--radius-sm);">
+            <canvas id="pairingQrCanvas" width="180" height="180"></canvas>
+          </div>
+          <div style="display:flex; gap:0.5rem;">
+            <button id="copyPairingLinkBtn" class="tool-btn" style="flex:1; justify-content:center;" type="button">Copy Pairing Link</button>
+          </div>
+          <div class="toggle-desc" style="margin-top:0.35rem; color:var(--text-muted);">
+            Anyone with this QR code or link can view and control your agents. Do not share publicly.
+          </div>
+        </div>
+
+        <!-- Web Push Notifications -->
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-title">Web Push Notifications</div>
+            <div class="toggle-desc">Alerts on blocked prompts and run completion</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="settingWebPushToggle" aria-label="Web Push Notifications" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- Audio Cues -->
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-title">Audio Synthesizer Cues</div>
+            <div class="toggle-desc">Synthesized annunciator tones on status alarm</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <button id="testAudioBtn" class="tool-btn" style="min-height:36px; padding:0.25rem 0.6rem;">Test Chime</button>
+            <label class="switch">
+              <input type="checkbox" id="settingAudioToggle" checked aria-label="Audio Cues" />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Diagnostics -->
+        <div class="form-group">
+          <label class="form-label">Connection Diagnostics</label>
+          <div id="diagnosticsLog" style="font-family:var(--font-mono); font-size:12px; background:var(--bg-panel); padding:0.6rem; border-radius:var(--radius-sm); border:1px solid var(--border-default); max-height:90px; overflow-y:auto; color:var(--text-secondary);">
+            Ready.
+          </div>
+        </div>
+
+        <!-- Save Button -->
+        <button id="saveSettingsBtn" class="send-btn" style="width:100%; justify-content:center;">Save & Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <span>herdr-outpost v1.0.0</span>
+    <span>•</span>
+    <a href="https://herdr.dev" target="_blank" rel="noopener">Herdr Docs</a>
+    <span>•</span>
+    <a href="https://github.com/harlanljones/herdr-outpost" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+
+  <!-- QR Code Generator (Vendored) -->
+  <script src="vendor/qrcode.js"></script>
+
+  <!-- Application Script -->
+  <script>
+    (() => {
+      'use strict';
+
+      // ======================================================================
+      // Configuration & State
+      // ======================================================================
+      const urlParams = new URLSearchParams(window.location.search);
+
+      const CONFIG = {
+        DEFAULT_RELAY_URL: 'wss://relay.example.com',
+        RECONNECT_INTERVAL_BASE: 2000,
+        RECONNECT_INTERVAL_MAX: 30000,
+        PING_INTERVAL: 25000,
+        PING_TIMEOUT: 12000,
+        OUTPUT_POLL_INTERVAL: 3000,
+        OUTPUT_READ_LINES: 300,
+        MAX_OUTPUT_CHARS: 250000,
+        DEBOUNCE_MS: 400,
+      };
+
+      const state = {
+        relayUrl: urlParams.get('relay') || localStorage.getItem('herdr_relay_url') || CONFIG.DEFAULT_RELAY_URL,
+        token: urlParams.get('token') || localStorage.getItem('herdr_relay_token') || '',
+        theme: urlParams.get('theme') || localStorage.getItem('herdr_theme') || (document.documentElement.classList.contains('light') ? 'light' : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')),
+        audioEnabled: localStorage.getItem('herdr_audio_enabled') !== 'false',
+        webPushEnabled: localStorage.getItem('herdr_webpush_enabled') === 'true',
+
+        // Fleet Data & Filters
+        agents: [],
+        selectedAgentId: urlParams.get('agent') || null,
+        pendingAction: urlParams.get('action') || null,
+        activeStatusFilter: 'all',
+        searchQuery: '',
+        autoscroll: true,
+
+        // Socket state
+        ws: null,
+        wsState: 'disconnected',
+        reconnectAttempts: 0,
+        reconnectTimer: null,
+        pingTimer: null,
+        pingWatchdogTimer: null,
+        outputs: new Map(),
+        outputPollTimer: null,
+        streaming: false,
+
+        // Push state
+        swRegistration: null,
+        pushSubscription: null,
+
+        // a11y & Debounce
+        lastFocusedElement: null,
+        debouncedActions: new Set(),
+      };
+
+      // ======================================================================
+      // Sound Synthesizer (Zero Dependencies)
+      // ======================================================================
+      class SoundEngine {
+        constructor() {
+          this.ctx = null;
+        }
+
+        initContext() {
+          if (!this.ctx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+              this.ctx = new AudioContext();
+            }
+          }
+          if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(() => {});
+          }
+        }
+
+        playTone(freq, type = 'sine', duration = 0.15, gainVal = 0.15) {
+          if (!state.audioEnabled) return;
+          try {
+            this.initContext();
+            if (!this.ctx) return;
+
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+
+            gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+
+            osc.start();
+            osc.stop(this.ctx.currentTime + duration);
+          } catch (e) {
+            console.warn('Audio error:', e);
+          }
+        }
+
+        playBlocked() {
+          if (!state.audioEnabled) return;
+          this.initContext();
+          this.playTone(520, 'triangle', 0.12, 0.18);
+          setTimeout(() => this.playTone(660, 'triangle', 0.2, 0.22), 120);
+        }
+
+        playDone() {
+          if (!state.audioEnabled) return;
+          this.initContext();
+          this.playTone(523.25, 'sine', 0.1, 0.15);
+          setTimeout(() => this.playTone(659.25, 'sine', 0.1, 0.15), 90);
+          setTimeout(() => this.playTone(783.99, 'sine', 0.25, 0.2), 180);
+        }
+
+        playClick() {
+          this.playTone(800, 'sine', 0.04, 0.05);
+        }
+      }
+
+      const sound = new SoundEngine();
+
+      function haptic(pattern) {
+        try {
+          if ('vibrate' in navigator) navigator.vibrate(pattern);
+        } catch (e) {}
+      }
+
+      function debounceAction(key, delay = CONFIG.DEBOUNCE_MS) {
+        if (state.debouncedActions.has(key)) return false;
+        state.debouncedActions.add(key);
+        setTimeout(() => state.debouncedActions.delete(key), delay);
+        return true;
+      }
+
+      // ======================================================================
+      // Security & Escaping Helpers
+      // ======================================================================
+      function escapeHtml(str) {
+        if (str == null) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;')
+          .replace(/`/g, '&#96;');
+      }
+
+      function normalizeSearchText(str) {
+        if (!str) return '';
+        return String(str)
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLocaleLowerCase();
+      }
+
+      // ======================================================================
+      // ANSI Terminal Parser
+      // ======================================================================
+      function ansiToHtml(text) {
+        if (!text) return '';
+
+        let escaped = escapeHtml(text);
+        const ansiRegex = /\x1b\[([0-9;]*)m/g;
+        let openTags = 0;
+
+        escaped = escaped.replace(ansiRegex, (match, p1) => {
+          if (!p1 || p1 === '0') {
+            const closing = '</span>'.repeat(openTags);
+            openTags = 0;
+            return closing;
+          }
+
+          const codes = p1.split(';').map(Number);
+          const classes = [];
+
+          for (let i = 0; i < codes.length; i++) {
+            const code = codes[i];
+            if (code === 1) classes.push('ansi-bold');
+            else if (code === 2) classes.push('ansi-dim');
+            else if (code === 3) classes.push('ansi-italic');
+            else if (code === 4) classes.push('ansi-underline');
+            else if (code === 30) classes.push('ansi-black');
+            else if (code === 31) classes.push('ansi-red');
+            else if (code === 32) classes.push('ansi-green');
+            else if (code === 33) classes.push('ansi-yellow');
+            else if (code === 34) classes.push('ansi-blue');
+            else if (code === 35) classes.push('ansi-magenta');
+            else if (code === 36) classes.push('ansi-cyan');
+            else if (code === 37) classes.push('ansi-white');
+            else if (code === 90) classes.push('ansi-bright-black');
+            else if (code === 91) classes.push('ansi-bright-red');
+            else if (code === 92) classes.push('ansi-bright-green');
+            else if (code === 93) classes.push('ansi-bright-yellow');
+            else if (code === 94) classes.push('ansi-bright-blue');
+            else if (code === 95) classes.push('ansi-bright-magenta');
+            else if (code === 96) classes.push('ansi-bright-cyan');
+            else if (code === 97) classes.push('ansi-bright-white');
+          }
+
+          if (classes.length > 0) {
+            openTags++;
+            return '<span class="' + classes.join(' ') + '">';
+          }
+          return '';
+        });
+
+        escaped += '</span>'.repeat(openTags);
+        return escaped;
+      }
+
+      // ======================================================================
+      // Protocol Normalization & Helpers
+      // ======================================================================
+      function normalizeAgent(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        const agent = Object.assign({}, raw);
+
+        agent.id = raw.id || raw.paneId || raw.pane_id || 'unknown';
+        agent.paneId = raw.paneId || raw.pane_id || agent.id;
+        agent.name = raw.name || raw.agent_name || '';
+        agent.host = raw.host || 'local';
+        agent.workspace = raw.workspace || raw.project || 'default';
+        agent.tab = raw.tab || '';
+        agent.status = (raw.status || 'unknown').toLowerCase();
+        agent.statusReason = raw.statusReason || raw.status_reason || raw.blockedReason || raw.reason || raw.message || '';
+        agent.blockedReason = agent.statusReason;
+        agent.lastMessage = raw.lastMessage || raw.last_message || raw.prompt || '';
+        agent.lastOutput = raw.lastOutput || raw.last_output || raw.output || '';
+        agent.toolCall = raw.toolCall || raw.tool_call || raw.action || '';
+        agent.updatedAt = raw.updatedAt || raw.updated_at || raw.lastActive || null;
+        agent.cwd = raw.cwd || (raw.metadata && raw.metadata.cwd) || '';
+        agent.pid = raw.pid != null ? raw.pid : null;
+
+        // Telemetry & Identity fields
+        agent.harness = raw.harness || raw.agent || '';
+        agent.harnessVersion = raw.harnessVersion || raw.harness_version || '';
+        agent.model = raw.model || '';
+        agent.taskTitle = raw.taskTitle || raw.task_title || raw.terminal_title_stripped || raw.terminal_title || '';
+        agent.gitRepo = raw.gitRepo || raw.git_repo || '';
+        agent.gitBranch = raw.gitBranch || raw.git_branch || '';
+        agent.gitDirty = raw.gitDirty !== undefined ? raw.gitDirty : (raw.git_dirty !== undefined ? raw.git_dirty : null);
+        agent.contextUsed = typeof raw.contextUsed === 'number' ? raw.contextUsed : (typeof raw.context_used === 'number' ? raw.context_used : null);
+        agent.contextLimit = typeof raw.contextLimit === 'number' ? raw.contextLimit : (typeof raw.context_limit === 'number' ? raw.context_limit : null);
+        agent.quota = (raw.quota && typeof raw.quota === 'object') ? raw.quota : null;
+        agent.costUsd = typeof raw.costUsd === 'number' ? raw.costUsd : (typeof raw.cost_usd === 'number' ? raw.cost_usd : null);
+
+        return agent;
+      }
+
+      function formatRelativeTime(dateStr) {
+        if (!dateStr) return 'idle';
+        const date = new Date(dateStr);
+        const time = date.getTime();
+        if (isNaN(time)) return escapeHtml(String(dateStr));
+
+        const deltaSeconds = Math.floor((Date.now() - time) / 1000);
+        if (deltaSeconds < 0 || deltaSeconds < 5) return 'just now';
+        if (deltaSeconds < 60) return deltaSeconds + 's ago';
+        const minutes = Math.floor(deltaSeconds / 60);
+        if (minutes < 60) return minutes + 'm ago';
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return hours + 'h ago';
+        const days = Math.floor(hours / 24);
+        if (days < 30) return days + 'd ago';
+
+        try {
+          return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+        } catch (e) {
+          return date.toLocaleDateString();
+        }
+      }
+
+      function formatTokenCount(num) {
+        if (num == null || isNaN(num)) return '';
+        const n = Number(num);
+        if (n < 0) return '0';
+        if (n >= 1000000000) return (n / 1000000000).toFixed(1) + 'B';
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+        if (n >= 1000) return Math.round(n / 1000) + 'k';
+        return String(Math.round(n));
+      }
+
+      function showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        container.appendChild(toast);
+
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateY(8px)';
+          toast.style.transition = 'all 0.2s ease';
+          setTimeout(() => toast.remove(), 200);
+        }, 3200);
+      }
+
+      function logDiagnostic(msg) {
+        const box = document.getElementById('diagnosticsLog');
+        if (!box) return;
+        const time = new Date().toLocaleTimeString();
+        const line = document.createElement('div');
+        line.textContent = '[' + time + '] ' + msg;
+        box.appendChild(line);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function relayHttpBase() {
+        let u = (state.relayUrl || '').trim();
+        u = u.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://');
+        if (!/^https?:\/\//i.test(u)) {
+          u = (location.protocol === 'https:' ? 'https://' : 'http://') + u;
+        }
+        return u.replace(/\/+$/, '');
+      }
+
+      function relayAuthHeaders() {
+        const headers = { 'Content-Type': 'application/json' };
+        if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+        return headers;
+      }
+
+      function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+          outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+      }
+
+      // ======================================================================
+      // Theme Management
+      // ======================================================================
+      function applyTheme(theme) {
+        state.theme = theme;
+        localStorage.setItem('herdr_theme', theme);
+        const html = document.documentElement;
+        const metaTheme = document.getElementById('meta-theme-color');
+        const moonIcon = document.getElementById('moonIcon');
+        const sunIcon = document.getElementById('sunIcon');
+
+        if (theme === 'light') {
+          html.classList.remove('dark');
+          html.classList.add('light');
+          if (metaTheme) metaTheme.setAttribute('content', '#edf1f7');
+          if (moonIcon) moonIcon.style.display = 'none';
+          if (sunIcon) sunIcon.style.display = 'block';
+        } else {
+          html.classList.remove('light');
+          html.classList.add('dark');
+          if (metaTheme) metaTheme.setAttribute('content', '#12151b');
+          if (moonIcon) moonIcon.style.display = 'block';
+          if (sunIcon) sunIcon.style.display = 'none';
+        }
+      }
+
+      // ======================================================================
+      // WebSocket Connection Management & Watchdog
+      // ======================================================================
+      function updateConnectionUI(statusText, stateClass) {
+        state.wsState = stateClass;
+        const pill = document.getElementById('connectionPill');
+        const text = document.getElementById('connectionStatusText');
+        if (pill) {
+          pill.className = 'connection-status-plate ' + stateClass;
+        }
+        if (text) {
+          text.textContent = statusText;
+        }
+      }
+
+      function connectWebSocket() {
+        if (state.ws) {
+          try { state.ws.close(); } catch (e) {}
+          state.ws = null;
+        }
+
+        clearTimeout(state.reconnectTimer);
+        clearInterval(state.pingTimer);
+        clearTimeout(state.pingWatchdogTimer);
+
+        if (!navigator.onLine) {
+          updateConnectionUI('Offline', 'disconnected');
+          document.getElementById('offlineBanner').classList.add('visible');
+          return;
+        }
+        document.getElementById('offlineBanner').classList.remove('visible');
+
+        let targetUrl = state.relayUrl.trim();
+        if (!targetUrl.startsWith('ws://') && !targetUrl.startsWith('wss://')) {
+          targetUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + targetUrl;
+        }
+
+        let wsEndpoint = targetUrl;
+        if (state.token) {
+          try {
+            const u = new URL(targetUrl);
+            u.searchParams.set('token', state.token);
+            wsEndpoint = u.toString();
+          } catch (e) {}
+        }
+
+        updateConnectionUI('Connecting...', 'connecting');
+        logDiagnostic('Connecting to ' + targetUrl + '...');
+
+        try {
+          const ws = new WebSocket(wsEndpoint);
+          state.ws = ws;
+
+          ws.onopen = () => {
+            logDiagnostic('WebSocket connected.');
+            state.reconnectAttempts = 0;
+
+            if (state.token) {
+              updateConnectionUI('Auth...', 'connecting');
+              ws.send(JSON.stringify({ type: 'auth', token: state.token }));
+            } else {
+              updateConnectionUI('Connected', 'connected');
+            }
+
+            ws.send(JSON.stringify({ type: 'get_agents' }));
+
+            if (state.pushSubscription) {
+              ws.send(JSON.stringify({ type: 'subscribe_push', subscription: state.pushSubscription.toJSON() }));
+            }
+
+            if (state.selectedAgentId) {
+              requestPaneOutput();
+              subscribeOutputStream();
+              startOutputPolling();
+            }
+
+            if (state.pendingAction && state.selectedAgentId) {
+              const act = state.pendingAction;
+              state.pendingAction = null;
+              if (act === 'approve' || act === 'reject') {
+                sendAgentAction(act);
+                showToast('Sent ' + act.toUpperCase() + ' from notification', 'info');
+              }
+            }
+
+            // Start Ping interval with Watchdog
+            state.pingTimer = setInterval(() => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+                clearTimeout(state.pingWatchdogTimer);
+                state.pingWatchdogTimer = setTimeout(() => {
+                  logDiagnostic('Ping timeout (no pong received). Recycling connection...');
+                  connectWebSocket();
+                }, CONFIG.PING_TIMEOUT);
+              }
+            }, CONFIG.PING_INTERVAL);
+          };
+
+          ws.onmessage = (event) => {
+            handleSocketMessage(event.data);
+          };
+
+          ws.onerror = () => {
+            logDiagnostic('WebSocket error.');
+            updateConnectionUI('Error', 'error');
+          };
+
+          ws.onclose = (event) => {
+            clearTimeout(state.pingWatchdogTimer);
+            logDiagnostic('WebSocket closed (code: ' + event.code + ').');
+            if (event.code === 4001 || event.code === 4003) {
+              updateConnectionUI('Auth Failed', 'error');
+              showToast('Relay Authentication Failed. Check token in settings.', 'error');
+            } else {
+              updateConnectionUI('Disconnected', 'disconnected');
+              scheduleReconnect();
+            }
+          };
+        } catch (err) {
+          logDiagnostic('Connection error: ' + err.message);
+          updateConnectionUI('Error', 'error');
+          scheduleReconnect();
+        }
+      }
+
+      function scheduleReconnect() {
+        if (!navigator.onLine) return;
+        state.reconnectAttempts++;
+        const jitter = Math.random() * 1000;
+        const delay = Math.min(
+          CONFIG.RECONNECT_INTERVAL_BASE * Math.pow(1.5, state.reconnectAttempts - 1) + jitter,
+          CONFIG.RECONNECT_INTERVAL_MAX
+        );
+        logDiagnostic('Reconnecting in ' + (delay / 1000).toFixed(1) + 's...');
+        clearTimeout(state.reconnectTimer);
+        state.reconnectTimer = setTimeout(() => {
+          connectWebSocket();
+        }, delay);
+      }
+
+      function sendSocketAction(payload) {
+        if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+          showToast('Not connected to relay', 'error');
+          return false;
+        }
+        state.ws.send(JSON.stringify(payload));
+        return true;
+      }
+
+      // ======================================================================
+      // Inbound Message Dispatcher
+      // ======================================================================
+      function handleSocketMessage(raw) {
+        let msg;
+        try {
+          msg = JSON.parse(raw);
+        } catch (e) {
+          return;
+        }
+
+        switch (msg.type) {
+          case 'agents_snapshot':
+          case 'agents':
+            if (Array.isArray(msg.agents)) {
+              handleAgentsUpdate(msg.agents.map(normalizeAgent).filter(Boolean));
+            }
+            break;
+
+          case 'agent_update': {
+            const agent = normalizeAgent(msg.agent);
+            if (agent) {
+              const idx = state.agents.findIndex(a => (a.id || a.paneId) === agent.id);
+              if (idx !== -1) {
+                const oldStatus = state.agents[idx].status;
+                state.agents[idx] = Object.assign({}, state.agents[idx], agent);
+                if (oldStatus !== 'blocked' && agent.status === 'blocked') {
+                  sound.playBlocked();
+                  haptic([150, 80, 150]);
+                  showToast('Agent requires approval: ' + (agent.taskTitle || agent.name || agent.id));
+                } else if (oldStatus !== 'done' && agent.status === 'done') {
+                  sound.playDone();
+                  haptic(80);
+                }
+              } else {
+                state.agents.push(agent);
+                if (agent.status === 'blocked') {
+                  sound.playBlocked();
+                  haptic([150, 80, 150]);
+                }
+              }
+              renderUI();
+
+              if (state.selectedAgentId === agent.id) {
+                updateModalDetails(agent);
+              }
+            }
+            break;
+          }
+
+          case 'agent_removed':
+          case 'agent_deleted':
+          case 'pane_closed': {
+            const removedId = msg.agent_id || msg.id || '';
+            const removedPane = msg.pane_id ? String(msg.pane_id) : '';
+            const before = state.agents.length;
+
+            state.outputs.delete(removedId);
+            if (removedPane) state.outputs.delete(removedPane);
+
+            state.agents = state.agents.filter(a =>
+              a.id !== removedId && (!removedPane || String(a.paneId) !== removedPane)
+            );
+            if (state.agents.length !== before) {
+              renderUI();
+              if (state.selectedAgentId && !state.agents.some(a => a.id === state.selectedAgentId)) {
+                closeModal();
+                showToast('Agent pane was closed');
+              }
+            }
+            break;
+          }
+
+          case 'read_pane_result':
+          case 'read_output_result':
+            handlePaneOutput(msg);
+            break;
+
+          case 'output_subscribed': {
+            const key = agentKeyFor(msg.agent_id);
+            if (key && key === state.selectedAgentId) {
+              state.streaming = true;
+              stopOutputPolling();
+            }
+            break;
+          }
+
+          case 'output_unsubscribed':
+            state.streaming = false;
+            break;
+
+          case 'pane_output':
+          case 'agent_output':
+          case 'output': {
+            const rawRef = msg.agent_id || msg.pane_id || msg.paneId || msg.id || '';
+            if (msg.error) break;
+            const key = agentKeyFor(rawRef);
+            if (!key) break;
+            const text = msg.data || msg.output || msg.text || '';
+            if (msg.full) {
+              let capped = text;
+              if (capped.length > CONFIG.MAX_OUTPUT_CHARS) {
+                capped = capped.slice(capped.length - CONFIG.MAX_OUTPUT_CHARS);
+              }
+              state.outputs.set(key, capped);
+              if (state.selectedAgentId === key) {
+                renderTerminalOutput(capped);
+              }
+            } else {
+              let updated = (state.outputs.get(key) || '') + text;
+              if (updated.length > CONFIG.MAX_OUTPUT_CHARS) {
+                updated = updated.slice(updated.length - CONFIG.MAX_OUTPUT_CHARS);
+              }
+              state.outputs.set(key, updated);
+              if (state.selectedAgentId === key) {
+                appendTerminalOutput(text);
+              }
+            }
+            break;
+          }
+
+          case 'push_subscribed':
+            if (msg.success) {
+              logDiagnostic('Push registered with relay.');
+            }
+            break;
+
+          case 'auth_ok':
+            updateConnectionUI('Connected', 'connected');
+            showToast('Relay Authenticated');
+            break;
+
+          case 'auth_required':
+            if (!state.token) {
+              updateConnectionUI('Auth Required', 'error');
+              showToast('Relay requires a token: open Settings');
+            }
+            break;
+
+          case 'auth_error':
+            updateConnectionUI('Auth Error', 'error');
+            showToast('Auth error: ' + (msg.message || 'Invalid token'));
+            break;
+
+          case 'pong':
+            clearTimeout(state.pingWatchdogTimer);
+            break;
+
+          default:
+            break;
+        }
+      }
+
+      function handleAgentsUpdate(newAgents) {
+        const prevBlockedMap = new Map(state.agents.map(a => [a.id || a.paneId, a.status]));
+        state.agents = newAgents;
+
+        for (const agent of state.agents) {
+          const id = agent.id || agent.paneId;
+          const oldStatus = prevBlockedMap.get(id);
+          if (oldStatus && oldStatus !== 'blocked' && agent.status === 'blocked') {
+            sound.playBlocked();
+            haptic([150, 80, 150]);
+          } else if (oldStatus && oldStatus !== 'done' && agent.status === 'done') {
+            sound.playDone();
+            haptic(80);
+          }
+
+          if (agent.lastOutput && !state.outputs.has(id)) {
+            state.outputs.set(id, agent.lastOutput.slice(-CONFIG.MAX_OUTPUT_CHARS));
+          }
+        }
+
+        renderUI();
+
+        if (state.selectedAgentId) {
+          const curr = state.agents.find(a => (a.id || a.paneId) === state.selectedAgentId);
+          if (curr) {
+            updateModalDetails(curr);
+          }
+        }
+      }
+
+      // ======================================================================
+      // Annunciator Fleet & Priority Renderers
+      // ======================================================================
+      function renderUI() {
+        renderFilterCounts();
+        renderFleetPanels();
+      }
+
+      function renderFilterCounts() {
+        const counts = { all: state.agents.length, blocked: 0, working: 0, done: 0, idle: 0 };
+        for (const a of state.agents) {
+          const st = a.status ? a.status.toLowerCase() : 'unknown';
+          if (counts[st] !== undefined) counts[st]++;
+        }
+
+        document.getElementById('countAll').textContent = counts.all;
+        document.getElementById('countBlocked').textContent = counts.blocked;
+        document.getElementById('countWorking').textContent = counts.working;
+        document.getElementById('countDone').textContent = counts.done;
+        document.getElementById('countIdle').textContent = counts.idle;
+
+        const blockedPill = document.querySelector('.filter-pill.blocked-pill');
+        if (blockedPill) {
+          if (counts.blocked > 0) {
+            blockedPill.classList.add('has-blocked');
+          } else {
+            blockedPill.classList.remove('has-blocked');
+          }
+        }
+      }
+
+      const STATUS_WEIGHT = { blocked: 4, working: 3, idle: 2, done: 1, unknown: 0 };
+
+      function renderFleetPanels() {
+        const fleetContainer = document.getElementById('fleetContainer');
+        const alarmStrip = document.getElementById('alarmStrip');
+        const alarmCardsContainer = document.getElementById('alarmCardsContainer');
+        const emptyState = document.getElementById('emptyState');
+        const emptyTitle = document.getElementById('emptyTitle');
+        const emptyDesc = document.getElementById('emptyDesc');
+        const emptyActionBtn = document.getElementById('emptyActionBtn');
+
+        const normalizedQuery = normalizeSearchText(state.searchQuery);
+
+        // Filter agents according to status and search query
+        const filtered = state.agents.filter(agent => {
+          const status = (agent.status || 'unknown').toLowerCase();
+          if (state.activeStatusFilter !== 'all' && status !== state.activeStatusFilter) {
+            return false;
+          }
+
+          if (normalizedQuery) {
+            const name = normalizeSearchText(agent.name || agent.id || '');
+            const cwd = normalizeSearchText(agent.cwd || '');
+            const host = normalizeSearchText(agent.host || 'local');
+            const blocked = normalizeSearchText(agent.statusReason || '');
+            const model = normalizeSearchText(agent.model || '');
+            const harness = normalizeSearchText(agent.harness || '');
+            const repo = normalizeSearchText(agent.gitRepo || '');
+            const branch = normalizeSearchText(agent.gitBranch || '');
+            const task = normalizeSearchText(agent.taskTitle || '');
+
+            if (!name.includes(normalizedQuery) && !cwd.includes(normalizedQuery) &&
+                !host.includes(normalizedQuery) && !blocked.includes(normalizedQuery) &&
+                !model.includes(normalizedQuery) && !harness.includes(normalizedQuery) &&
+                !repo.includes(normalizedQuery) && !branch.includes(normalizedQuery) &&
+                !task.includes(normalizedQuery)) {
+              return false;
+            }
+          }
+          return true;
+        });
+
+        // 1. Render Top ALARM Strip
+        const blockedAgents = filtered.filter(a => (a.status || '').toLowerCase() === 'blocked');
+        if (blockedAgents.length > 0) {
+          alarmStrip.style.display = 'flex';
+          document.getElementById('alarmCountBadge').textContent = blockedAgents.length + ' BLOCKED';
+          alarmCardsContainer.innerHTML = blockedAgents.map(agent => renderAlarmCardHtml(agent)).join('');
+        } else {
+          alarmStrip.style.display = 'none';
+          alarmCardsContainer.innerHTML = '';
+        }
+
+        // 2. Handle Empty States (Context-Aware)
+        if (filtered.length === 0) {
+          fleetContainer.innerHTML = '';
+          emptyState.style.display = 'flex';
+
+          if (state.agents.length === 0) {
+            emptyTitle.textContent = 'No Active Agents';
+            emptyDesc.textContent = 'Waiting for herdr relay connection or no agents are currently running.';
+            emptyActionBtn.textContent = 'Configure Relay';
+            emptyActionBtn.onclick = openSettings;
+          } else if (state.searchQuery) {
+            emptyTitle.textContent = 'No Matching Agents';
+            emptyDesc.textContent = 'No active agents match "' + escapeHtml(state.searchQuery) + '".';
+            emptyActionBtn.textContent = 'Clear Search';
+            emptyActionBtn.onclick = () => {
+              state.searchQuery = '';
+              document.getElementById('searchInput').value = '';
+              renderFleetPanels();
+            };
+          } else if (state.activeStatusFilter !== 'all') {
+            emptyTitle.textContent = 'No ' + state.activeStatusFilter.toUpperCase() + ' Agents';
+            emptyDesc.textContent = 'No agents currently in the "' + state.activeStatusFilter + '" state.';
+            emptyActionBtn.textContent = 'Show All Agents (' + state.agents.length + ')';
+            emptyActionBtn.onclick = () => {
+              state.activeStatusFilter = 'all';
+              document.querySelectorAll('.filter-pill').forEach(p => {
+                const isAll = p.dataset.status === 'all';
+                p.classList.toggle('active', isAll);
+                p.setAttribute('aria-selected', isAll ? 'true' : 'false');
+              });
+              renderFleetPanels();
+            };
+          }
+          return;
+        }
+
+        emptyState.style.display = 'none';
+
+        // 3. Group by repo (fallback to workspace)
+        const groupsMap = new Map();
+        for (const agent of filtered) {
+          const repoKey = agent.gitRepo || agent.workspace || 'default';
+          if (!groupsMap.has(repoKey)) {
+            groupsMap.set(repoKey, []);
+          }
+          groupsMap.get(repoKey).push(agent);
+        }
+
+        // Sort repo groups by urgency of their most urgent agent
+        const sortedGroups = Array.from(groupsMap.entries()).sort((a, b) => {
+          const maxA = Math.max(...a[1].map(ag => STATUS_WEIGHT[(ag.status || '').toLowerCase()] || 0));
+          const maxB = Math.max(...b[1].map(ag => STATUS_WEIGHT[(ag.status || '').toLowerCase()] || 0));
+          if (maxB !== maxA) return maxB - maxA;
+          return a[0].localeCompare(b[0]);
+        });
+
+        // 4. Render Zone Sections
+        fleetContainer.innerHTML = sortedGroups.map(([repoKey, groupAgents]) => {
+          // Sort agents within group: blocked > working > idle > done
+          groupAgents.sort((a, b) => {
+            const wA = STATUS_WEIGHT[(a.status || '').toLowerCase()] || 0;
+            const wB = STATUS_WEIGHT[(b.status || '').toLowerCase()] || 0;
+            if (wB !== wA) return wB - wA;
+            return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+          });
+
+          // Branch & Dirty state from first agent that has it
+          const firstWithBranch = groupAgents.find(a => a.gitBranch) || groupAgents[0];
+          const branch = firstWithBranch ? firstWithBranch.gitBranch : '';
+          const dirty = groupAgents.some(a => a.gitDirty === true);
+          const hasAlarm = groupAgents.some(a => (a.status || '').toLowerCase() === 'blocked');
+          const isBusy = groupAgents.length >= 3;
+
+          let zoneClass = 'repo-zone';
+          if (hasAlarm) zoneClass += ' has-alarm';
+          else if (isBusy) zoneClass += ' density-high';
+
+          return '<section class="' + zoneClass + '">' +
+            '<div class="repo-zone-header">' +
+              '<div class="repo-identity">' +
+                '<span class="repo-name">' + escapeHtml(repoKey) + '</span>' +
+                (branch ? '<span class="repo-branch">' + escapeHtml(branch) + (dirty ? '<span class="repo-dirty-flag">*</span>' : '') + '</span>' : '') +
+              '</div>' +
+              '<span class="repo-count-badge">' + groupAgents.length + ' ' + (groupAgents.length === 1 ? 'agent' : 'agents') + '</span>' +
+            '</div>' +
+            '<div class="repo-agent-list">' +
+              groupAgents.map(agent => renderAgentRowHtml(agent)).join('') +
+            '</div>' +
+          '</section>';
+        }).join('');
+      }
+
+      function getStatusPlateHtml(status) {
+        const st = (status || 'unknown').toLowerCase();
+        let glyph = '?';
+        let label = 'UNKNOWN';
+
+        if (st === 'blocked') {
+          glyph = '▲';
+          label = 'BLOCKED';
+        } else if (st === 'working') {
+          glyph = '▶';
+          label = 'WORKING';
+        } else if (st === 'done') {
+          glyph = '✓';
+          label = 'DONE';
+        } else if (st === 'idle') {
+          glyph = '■';
+          label = 'IDLE';
+        }
+
+        return '<span class="status-plate ' + st + '">' + glyph + ' ' + label + '</span>';
+      }
+
+      function renderRunwayHtml(agent) {
+        if (agent.contextUsed != null && agent.contextLimit != null && agent.contextLimit > 0) {
+          const pct = Math.min(100, Math.max(0, Math.round((agent.contextUsed / agent.contextLimit) * 100)));
+          const warn = pct >= 80 ? 'warn' : '';
+          return '<div class="runway-meter-wrap" title="Context Runway: ' + agent.contextUsed + ' / ' + agent.contextLimit + ' tokens (' + pct + '%)">' +
+            '<div class="runway-bar-bg">' +
+              '<div class="runway-bar-fill ' + warn + '" style="transform: scaleX(' + (pct / 100) + ');"></div>' +
+            '</div>' +
+            '<span class="runway-text">' + pct + '% context (' + formatTokenCount(agent.contextUsed) + '/' + formatTokenCount(agent.contextLimit) + ')</span>' +
+          '</div>';
+        } else if (agent.quota && agent.quota.percent != null) {
+          const pct = Math.min(100, Math.max(0, Math.round(agent.quota.percent)));
+          const lbl = agent.quota.label || 'quota';
+          const warn = pct >= 80 ? 'warn' : '';
+          return '<div class="runway-meter-wrap" title="Quota Window: ' + pct + '%">' +
+            '<div class="runway-bar-bg">' +
+              '<div class="runway-bar-fill ' + warn + '" style="transform: scaleX(' + (pct / 100) + ');"></div>' +
+            '</div>' +
+            '<span class="runway-text">' + escapeHtml(lbl) + ': ' + pct + '%</span>' +
+          '</div>';
+        }
+        return '';
+      }
+
+      function renderAlarmCardHtml(agent) {
+        const id = agent.id || agent.paneId || 'unknown';
+        const harness = agent.harness || 'Agent';
+        const model = agent.model || agent.name || id;
+        const repo = agent.gitRepo || agent.workspace || 'Workspace';
+        const reason = agent.statusReason || agent.lastMessage || 'Requires input/approval';
+
+        return '<div class="agent-row status-blocked" data-id="' + escapeHtml(id) + '">' +
+          '<div class="agent-row-main" onclick="openModal(\'' + escapeHtml(id) + '\')">' +
+            '<div class="agent-line-1">' +
+              '<div class="agent-harness-model">' +
+                '<span class="harness-tag">' + escapeHtml(harness) + '</span>' +
+                '<span class="model-tag">' + escapeHtml(model) + '</span>' +
+                '<span class="host-tag">' + escapeHtml(repo) + '</span>' +
+              '</div>' +
+              getStatusPlateHtml('blocked') +
+            '</div>' +
+            '<div class="hinge-reason-box" style="margin-top:0.35rem;">' + escapeHtml(reason) + '</div>' +
+          '</div>' +
+          '<div class="hinge-container open" onclick="event.stopPropagation();">' +
+            '<div class="hinge-actions-row">' +
+              '<button class="btn-approve" data-action="approve" data-id="' + escapeHtml(id) + '">✓ Approve</button>' +
+              '<button class="btn-reject" data-action="reject" data-id="' + escapeHtml(id) + '">✕ Reject</button>' +
+              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="y">y</button>' +
+              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="yes">yes</button>' +
+              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="n">n</button>' +
+              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="always">always allow</button>' +
+              '<button class="btn-open-terminal" onclick="openModal(\'' + escapeHtml(id) + '\')">Terminal →</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }
+
+      function renderAgentRowHtml(agent) {
+        const id = agent.id || agent.paneId || 'unknown';
+        const harness = agent.harness || 'Agent';
+        const model = agent.model || agent.name || ('Agent ' + id);
+        const host = agent.host || 'local';
+        const isRemote = host !== 'local';
+        const status = (agent.status || 'unknown').toLowerCase();
+        const isBlocked = status === 'blocked';
+
+        const task = agent.taskTitle || agent.lastMessage || agent.toolCall || (agent.lastOutput ? agent.lastOutput.slice(0, 100) : 'Idle / Ready');
+        const timeAgo = formatRelativeTime(agent.updatedAt);
+        const runwayHtml = renderRunwayHtml(agent);
+        const reason = agent.statusReason || agent.lastMessage || 'Awaiting response';
+
+        let hingeHtml = '';
+        if (isBlocked) {
+          hingeHtml = '<div class="hinge-container open" onclick="event.stopPropagation();">' +
+            '<div class="hinge-reason-box">' + escapeHtml(reason) + '</div>' +
+            '<div class="hinge-actions-row">' +
+              '<button class="btn-approve" data-action="approve" data-id="' + escapeHtml(id) + '">✓ Approve</button>' +
+              '<button class="btn-reject" data-action="reject" data-id="' + escapeHtml(id) + '">✕ Reject</button>' +
+              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="y">y</button>' +
+              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="yes">yes</button>' +
+              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="n">n</button>' +
+              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="always">always allow</button>' +
+              '<button class="btn-open-terminal" onclick="openModal(\'' + escapeHtml(id) + '\')">Terminal →</button>' +
+            '</div>' +
+          '</div>';
+        }
+
+        return '<div class="agent-row status-' + status + '" data-id="' + escapeHtml(id) + '">' +
+          '<div class="agent-row-main" onclick="openModal(\'' + escapeHtml(id) + '\')">' +
+            '<div class="agent-line-1">' +
+              '<div class="agent-harness-model">' +
+                '<span class="harness-tag">' + escapeHtml(harness) + '</span>' +
+                '<span class="model-tag" title="' + escapeHtml(model) + '">' + escapeHtml(model) + '</span>' +
+                (isRemote ? '<span class="host-tag">' + escapeHtml(host) + '</span>' : '') +
+              '</div>' +
+              getStatusPlateHtml(status) +
+            '</div>' +
+            '<div class="agent-line-2" title="' + escapeHtml(task) + '">' + escapeHtml(task) + '</div>' +
+            '<div class="agent-line-3">' +
+              runwayHtml +
+              '<span class="agent-time-ago">' + escapeHtml(timeAgo) + '</span>' +
+            '</div>' +
+          '</div>' +
+          hingeHtml +
+        '</div>';
+      }
+
+      // ======================================================================
+      // Focus Trapping & Accessibility Controller
+      // ======================================================================
+      function trapFocus(modal, e) {
+        if (e.key !== 'Tab') return;
+        const focusables = modal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        if (focusables.length === 0) return;
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            last.focus();
+            e.preventDefault();
+          }
+        } else {
+          if (document.activeElement === last) {
+            first.focus();
+            e.preventDefault();
+          }
+        }
+      }
+
+      // ======================================================================
+      // Terminal Sheet Controller
+      // ======================================================================
+      window.openModal = function(agentId) {
+        state.lastFocusedElement = document.activeElement;
+        const agent = state.agents.find(a =>
+          a.id === agentId || String(a.paneId) === String(agentId) || a.id.endsWith(':' + agentId)
+        );
+        state.selectedAgentId = agent ? agent.id : agentId;
+        const modal = document.getElementById('terminalModal');
+        modal.classList.add('open');
+
+        if (agent) {
+          updateModalDetails(agent);
+        }
+
+        const screen = document.getElementById('terminalScreen');
+        const output = state.outputs.get(state.selectedAgentId) || (agent ? (agent.lastOutput || '') : '');
+        screen.innerHTML = ansiToHtml(output) || '<span style="color:var(--text-muted);">No terminal output captured yet...</span>';
+
+        if (state.autoscroll) {
+          screen.scrollTop = screen.scrollHeight;
+        }
+
+        requestPaneOutput();
+        subscribeOutputStream();
+        startOutputPolling();
+
+        if (window.matchMedia('(pointer: fine)').matches) {
+          document.getElementById('promptInput').focus();
+        }
+      };
+
+      function closeModal() {
+        const modal = document.getElementById('terminalModal');
+        modal.classList.remove('open');
+        unsubscribeOutputStream();
+        stopOutputPolling();
+        state.selectedAgentId = null;
+        if (state.lastFocusedElement && typeof state.lastFocusedElement.focus === 'function') {
+          state.lastFocusedElement.focus();
+        }
+      }
+
+      function updateModalDetails(agent) {
+        const id = agent.id || agent.paneId || '';
+        const harness = agent.harness || 'Agent';
+        const model = agent.model || agent.name || ('Agent ' + id);
+
+        document.getElementById('modalAgentName').textContent = harness + ' · ' + model;
+
+        const status = (agent.status || 'unknown').toLowerCase();
+        const statusBadge = document.getElementById('modalStatusBadge');
+        statusBadge.className = 'status-plate ' + status;
+        statusBadge.innerHTML = getStatusPlateHtml(status);
+
+        document.getElementById('metaHarness').textContent = (agent.harness || 'none') + (agent.harnessVersion ? ' v' + agent.harnessVersion : '');
+        document.getElementById('metaModel').textContent = agent.model || 'none';
+        document.getElementById('metaRepo').textContent = agent.gitRepo || agent.workspace || 'none';
+        document.getElementById('metaBranch').textContent = (agent.gitBranch || 'none') + (agent.gitDirty ? ' (dirty)' : '');
+
+        let runwayStr = 'none';
+        if (agent.contextUsed != null && agent.contextLimit != null && agent.contextLimit > 0) {
+          const pct = Math.min(100, Math.max(0, Math.round((agent.contextUsed / agent.contextLimit) * 100)));
+          runwayStr = formatTokenCount(agent.contextUsed) + ' / ' + formatTokenCount(agent.contextLimit) + ' (' + pct + '%)';
+        } else if (agent.quota && agent.quota.percent != null) {
+          runwayStr = (agent.quota.label || 'quota') + ': ' + agent.quota.percent + '%';
+        }
+        document.getElementById('metaRunway').textContent = runwayStr;
+        document.getElementById('metaHost').textContent = agent.host || 'local';
+        document.getElementById('metaPid').textContent = agent.pid != null ? agent.pid : 'none';
+        document.getElementById('metaPane').textContent = agent.paneId || 'none';
+        document.getElementById('metaCwd').textContent = agent.cwd || 'none';
+
+        const blockedBanner = document.getElementById('modalBlockedBanner');
+        if (status === 'blocked') {
+          blockedBanner.style.display = 'flex';
+          document.getElementById('modalBlockedReason').textContent = agent.statusReason || agent.lastMessage || 'Awaiting response';
+        } else {
+          blockedBanner.style.display = 'none';
+        }
+      }
+
+      function sendAgentAction(type, extra) {
+        if (!state.selectedAgentId) return false;
+        return sendSocketAction(Object.assign(
+          { type: type, agent_id: state.selectedAgentId },
+          extra || {}
+        ));
+      }
+
+      function requestPaneOutput() {
+        if (!state.selectedAgentId) return;
+        sendSocketAction({
+          type: 'read_pane',
+          agent_id: state.selectedAgentId,
+          format: 'ansi',
+          lines: CONFIG.OUTPUT_READ_LINES,
+        });
+      }
+
+      function subscribeOutputStream() {
+        if (!state.selectedAgentId) return;
+        state.streaming = false;
+        sendSocketAction({ type: 'subscribe_output', agent_id: state.selectedAgentId });
+      }
+
+      function unsubscribeOutputStream() {
+        if (state.selectedAgentId) {
+          sendSocketAction({ type: 'unsubscribe_output', agent_id: state.selectedAgentId });
+        }
+        state.streaming = false;
+      }
+
+      function agentKeyFor(ref) {
+        if (!ref) return '';
+        ref = String(ref);
+        const owner = state.agents.find(a =>
+          a.id === ref || String(a.paneId) === ref ||
+          a.id.endsWith(':' + ref) || ref.endsWith(':' + a.paneId)
+        );
+        return owner ? owner.id : ref;
+      }
+
+      function startOutputPolling() {
+        stopOutputPolling();
+        state.outputPollTimer = setInterval(requestPaneOutput, CONFIG.OUTPUT_POLL_INTERVAL);
+      }
+
+      function stopOutputPolling() {
+        if (state.outputPollTimer) {
+          clearInterval(state.outputPollTimer);
+          state.outputPollTimer = null;
+        }
+      }
+
+      function renderTerminalOutput(output) {
+        const screen = document.getElementById('terminalScreen');
+        const wasAtBottom = (screen.scrollHeight - screen.scrollTop) <= (screen.clientHeight + 40);
+        screen.innerHTML = ansiToHtml(output) || '<span style="color:var(--text-muted);">No terminal output received...</span>';
+        if (state.autoscroll && wasAtBottom) {
+          screen.scrollTop = screen.scrollHeight;
+        }
+      }
+
+      function appendTerminalOutput(rawText) {
+        const screen = document.getElementById('terminalScreen');
+        const wasAtBottom = (screen.scrollHeight - screen.scrollTop) <= (screen.clientHeight + 40);
+        screen.innerHTML += ansiToHtml(rawText);
+        if (state.autoscroll && wasAtBottom) {
+          screen.scrollTop = screen.scrollHeight;
+        }
+      }
+
+      function handlePaneOutput(msg) {
+        if (msg.success === false) return;
+        const ref = msg.pane_id || msg.paneId || msg.agent_id || '';
+        const key = agentKeyFor(ref) || state.selectedAgentId;
+        if (!key) return;
+
+        let output = typeof msg.output === 'string' ? msg.output : '';
+        if (output.length > CONFIG.MAX_OUTPUT_CHARS) {
+          output = output.slice(output.length - CONFIG.MAX_OUTPUT_CHARS);
+        }
+        state.outputs.set(key, output);
+
+        if (state.selectedAgentId === key) {
+          renderTerminalOutput(output);
+        }
+      }
+
+      function sendUserPrompt() {
+        const input = document.getElementById('promptInput');
+        const text = input.value.trim();
+        if (!text || !state.selectedAgentId) return;
+
+        if (!debounceAction('prompt_' + state.selectedAgentId)) return;
+
+        sound.playClick();
+        haptic(20);
+        if (sendAgentAction('send_keys', { keys: text + '\n' })) {
+          input.value = '';
+        }
+      }
+
+      const QUICK_KEY_SEQUENCES = {
+        Enter: '\n',
+        Escape: '\x1b',
+        Space: ' ',
+        Tab: '\t',
+        Up: '\x1b[A',
+        Down: '\x1b[B',
+      };
+
+      function sendQuickKey(key) {
+        if (!state.selectedAgentId) return;
+        if (!debounceAction('key_' + key, 200)) return;
+
+        sound.playClick();
+        haptic(20);
+
+        if (key === 'CtrlC') {
+          sendAgentAction('interrupt');
+          showToast('Sent Interrupt (Ctrl+C)');
+          return;
+        }
+
+        const seq = QUICK_KEY_SEQUENCES[key];
+        if (seq) {
+          sendAgentAction('send_keys', { keys: seq });
+        }
+      }
+
+      function sendApproval(action, customText = null, targetAgentId = null) {
+        const id = targetAgentId || state.selectedAgentId;
+        if (!id) return;
+
+        if (!debounceAction('action_' + id + '_' + action)) return;
+
+        sound.playClick();
+        haptic(30);
+
+        if (action === 'approve' || action === 'reject') {
+          sendSocketAction({ type: action, agent_id: id });
+        } else {
+          sendSocketAction({ type: 'send_keys', agent_id: id, keys: customText || '' });
+        }
+
+        showToast('Sent ' + action.toUpperCase() + ' response');
+      }
+
+      // ======================================================================
+      // QR Pairing & Settings Controller
+      // ======================================================================
+      function openSettings() {
+        state.lastFocusedElement = document.activeElement;
+        document.getElementById('settingRelayUrl').value = state.relayUrl;
+        document.getElementById('settingRelayToken').value = state.token;
+        document.getElementById('settingAudioToggle').checked = state.audioEnabled;
+        document.getElementById('settingWebPushToggle').checked = state.webPushEnabled;
+        document.getElementById('settingsModal').classList.add('open');
+        renderPairingQr();
+      }
+
+      function buildPairingUrl() {
+        const u = new URL(window.location.href);
+        u.search = '';
+        u.hash = '';
+        u.searchParams.set('relay', state.relayUrl);
+        u.searchParams.set('token', state.token);
+        return u.toString();
+      }
+
+      function renderPairingQr() {
+        const section = document.getElementById('pairingSection');
+        const canvas = document.getElementById('pairingQrCanvas');
+        if (!section || !canvas) return;
+
+        if (!state.relayUrl || !state.token) {
+          section.style.display = 'none';
+          return;
+        }
+        section.style.display = '';
+
+        try {
+          const pairingUrl = buildPairingUrl();
+          const qr = qrcode(0, 'M');
+          qr.addData(pairingUrl);
+          qr.make();
+
+          const size = canvas.width;
+          const count = qr.getModuleCount();
+          const cellSize = size / count;
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, size, size);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, size, size);
+          ctx.fillStyle = '#000000';
+          for (let row = 0; row < count; row++) {
+            for (let col = 0; col < count; col++) {
+              if (qr.isDark(row, col)) {
+                ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('QR render error:', e);
+        }
+      }
+
+      function closeSettings() {
+        document.getElementById('settingsModal').classList.remove('open');
+        if (state.lastFocusedElement && typeof state.lastFocusedElement.focus === 'function') {
+          state.lastFocusedElement.focus();
+        }
+      }
+
+      function saveSettings() {
+        const newUrl = document.getElementById('settingRelayUrl').value.trim() || CONFIG.DEFAULT_RELAY_URL;
+        const newToken = document.getElementById('settingRelayToken').value.trim();
+        const audio = document.getElementById('settingAudioToggle').checked;
+        const push = document.getElementById('settingWebPushToggle').checked;
+        const wasPushEnabled = state.webPushEnabled;
+
+        state.relayUrl = newUrl;
+        state.token = newToken;
+        state.audioEnabled = audio;
+        state.webPushEnabled = push;
+
+        localStorage.setItem('herdr_relay_url', newUrl);
+        localStorage.setItem('herdr_relay_token', newToken);
+        localStorage.setItem('herdr_audio_enabled', audio);
+        localStorage.setItem('herdr_webpush_enabled', push);
+
+        renderPairingQr();
+        closeSettings();
+        showToast('Settings saved. Reconnecting...');
+        connectWebSocket();
+
+        if (push && (!wasPushEnabled || !state.pushSubscription)) {
+          subscribeWebPush();
+        } else if (!push && (wasPushEnabled || state.pushSubscription)) {
+          unsubscribeWebPush();
+        }
+      }
+
+      // ======================================================================
+      // Web Push
+      // ======================================================================
+      async function setupWebPush() {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+        try {
+          state.swRegistration = await navigator.serviceWorker.register('sw.js');
+          state.pushSubscription = await state.swRegistration.pushManager.getSubscription();
+          if (state.pushSubscription && !state.webPushEnabled) {
+            state.webPushEnabled = true;
+            localStorage.setItem('herdr_webpush_enabled', 'true');
+          }
+          if (state.webPushEnabled) {
+            await subscribeWebPush();
+          }
+        } catch (err) {
+          logDiagnostic('ServiceWorker error: ' + err.message);
+        }
+      }
+
+      async function subscribeWebPush() {
+        if (!state.swRegistration) return false;
+
+        try {
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') {
+            showToast('Notification permission denied');
+            state.webPushEnabled = false;
+            localStorage.setItem('herdr_webpush_enabled', 'false');
+            return false;
+          }
+
+          let vapidKey = null;
+          try {
+            const resp = await fetch(relayHttpBase() + '/push/vapid-key');
+            if (resp.ok) {
+              const data = await resp.json();
+              vapidKey = data.publicKey || data.vapid_key || null;
+            }
+          } catch (e) {}
+
+          const subscribeOptions = { userVisibleOnly: true };
+          if (vapidKey) {
+            subscribeOptions.applicationServerKey = urlBase64ToUint8Array(vapidKey);
+          }
+
+          const sub = await state.swRegistration.pushManager.subscribe(subscribeOptions);
+          state.pushSubscription = sub;
+
+          const subJson = sub.toJSON();
+          const sent = sendSocketAction({ type: 'subscribe_push', subscription: subJson });
+          if (!sent) {
+            await fetch(relayHttpBase() + '/push/subscribe', {
+              method: 'POST',
+              headers: relayAuthHeaders(),
+              body: JSON.stringify(subJson),
+            });
+          }
+
+          state.webPushEnabled = true;
+          localStorage.setItem('herdr_webpush_enabled', 'true');
+          showToast('Push notifications enabled');
+          return true;
+        } catch (err) {
+          showToast('Failed to enable push: ' + err.message);
+          return false;
+        }
+      }
+
+      async function unsubscribeWebPush() {
+        try {
+          const reg = state.swRegistration || ('serviceWorker' in navigator ? await navigator.serviceWorker.ready : null);
+          const sub = state.pushSubscription || (reg ? await reg.pushManager.getSubscription() : null);
+
+          if (sub) {
+            sendSocketAction({ type: 'unsubscribe_push', endpoint: sub.endpoint });
+            try {
+              await fetch(relayHttpBase() + '/push/unsubscribe', {
+                method: 'POST',
+                headers: relayAuthHeaders(),
+                body: JSON.stringify({ endpoint: sub.endpoint }),
+              });
+            } catch (e) {}
+            await sub.unsubscribe();
+          }
+
+          state.pushSubscription = null;
+          state.webPushEnabled = false;
+          localStorage.setItem('herdr_webpush_enabled', 'false');
+          showToast('Push notifications disabled');
+        } catch (err) {}
+      }
+
+      // ======================================================================
+      // Event Listeners & Bootstrapping
+      // ======================================================================
+      function initEventListeners() {
+        // Online / Offline Detection
+        window.addEventListener('online', () => {
+          document.getElementById('offlineBanner').classList.remove('visible');
+          showToast('Network restored. Reconnecting...');
+          state.reconnectAttempts = 0;
+          connectWebSocket();
+        });
+
+        window.addEventListener('offline', () => {
+          document.getElementById('offlineBanner').classList.add('visible');
+          updateConnectionUI('Offline', 'disconnected');
+          showToast('Network connection lost', 'error');
+        });
+
+        // Theme Toggle
+        document.getElementById('themeToggleBtn').addEventListener('click', () => {
+          applyTheme(state.theme === 'dark' ? 'light' : 'dark');
+        });
+
+        document.getElementById('settingsBtn').addEventListener('click', openSettings);
+        document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
+        document.getElementById('connectionPill').addEventListener('click', () => {
+          if (state.wsState === 'disconnected' || state.wsState === 'error') {
+            connectWebSocket();
+          } else {
+            openSettings();
+          }
+        });
+        document.getElementById('emptyActionBtn').addEventListener('click', openSettings);
+        document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+
+        document.getElementById('copyPairingLinkBtn').addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(buildPairingUrl());
+            showToast('Pairing link copied');
+          } catch (err) {
+            showToast('Could not copy link');
+          }
+        });
+
+        document.querySelectorAll('.preset-chip').forEach(chip => {
+          chip.addEventListener('click', () => {
+            document.getElementById('settingRelayUrl').value = chip.dataset.url;
+          });
+        });
+
+        document.getElementById('toggleTokenVisibilityBtn').addEventListener('click', () => {
+          const input = document.getElementById('settingRelayToken');
+          input.type = input.type === 'password' ? 'text' : 'password';
+        });
+
+        document.getElementById('testAudioBtn').addEventListener('click', () => {
+          sound.playBlocked();
+          setTimeout(() => sound.playDone(), 350);
+        });
+
+        // Status Filters
+        document.getElementById('statusFilterContainer').addEventListener('click', (e) => {
+          const pill = e.target.closest('.filter-pill');
+          if (!pill) return;
+          document.querySelectorAll('.filter-pill').forEach(p => {
+            p.classList.remove('active');
+            p.setAttribute('aria-selected', 'false');
+          });
+          pill.classList.add('active');
+          pill.setAttribute('aria-selected', 'true');
+          state.activeStatusFilter = pill.dataset.status;
+          renderFleetPanels();
+        });
+
+        // Search Input
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+          state.searchQuery = e.target.value;
+          renderFleetPanels();
+        });
+
+        // Global inline actions delegation
+        document.addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+          const action = btn.dataset.action;
+          const id = btn.dataset.id;
+          const text = btn.dataset.text;
+
+          if (action === 'approve' || action === 'reject') {
+            sendApproval(action, null, id);
+          } else if (action === 'custom') {
+            sendApproval('custom', (text || '') + '\n', id);
+          }
+        });
+
+        // Modal Controls
+        document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+        document.getElementById('toggleTelemetryBtn').addEventListener('click', () => {
+          const drawer = document.getElementById('telemetryDrawer');
+          drawer.style.display = drawer.style.display === 'none' ? 'grid' : 'none';
+        });
+
+        document.getElementById('modalApproveBtn').addEventListener('click', () => sendApproval('approve'));
+        document.getElementById('modalRejectBtn').addEventListener('click', () => sendApproval('reject'));
+
+        document.querySelectorAll('.sheet-blocked-banner .quick-chip').forEach(chip => {
+          chip.addEventListener('click', () => {
+            sendApproval('custom', chip.dataset.text + '\n');
+          });
+        });
+
+        // Terminal Tools
+        document.getElementById('autoscrollToggleBtn').addEventListener('click', (e) => {
+          state.autoscroll = !state.autoscroll;
+          e.target.classList.toggle('active', state.autoscroll);
+        });
+
+        document.getElementById('copyTerminalBtn').addEventListener('click', () => {
+          const screen = document.getElementById('terminalScreen');
+          navigator.clipboard.writeText(screen.innerText).then(() => {
+            showToast('Terminal output copied');
+          }).catch(() => {
+            showToast('Could not copy terminal output');
+          });
+        });
+
+        document.getElementById('clearTerminalBtn').addEventListener('click', () => {
+          document.getElementById('terminalScreen').innerHTML = '';
+        });
+
+        // Quick Keys
+        document.querySelectorAll('.key-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            sendQuickKey(btn.dataset.key);
+          });
+        });
+
+        // Prompt Input
+        document.getElementById('sendPromptBtn').addEventListener('click', sendUserPrompt);
+        document.getElementById('promptInput').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            sendUserPrompt();
+          }
+        });
+
+        // Keyboard navigation & Focus Trapping
+        document.addEventListener('keydown', (e) => {
+          const settingsModal = document.getElementById('settingsModal');
+          const terminalModal = document.getElementById('terminalModal');
+
+          if (e.key === 'Escape') {
+            if (settingsModal.classList.contains('open')) {
+              closeSettings();
+            } else if (terminalModal.classList.contains('open')) {
+              closeModal();
+            }
+          } else if (e.key === 'Tab') {
+            if (settingsModal.classList.contains('open')) {
+              trapFocus(settingsModal, e);
+            } else if (terminalModal.classList.contains('open')) {
+              trapFocus(terminalModal, e);
+            }
+          }
+        });
+
+        // Close backdrops on click
+        document.querySelectorAll('.terminal-backdrop, .settings-backdrop').forEach(backdrop => {
+          backdrop.addEventListener('click', (e) => {
+            if (e.target === backdrop) {
+              if (backdrop.id === 'terminalModal') closeModal();
+              else closeSettings();
+            }
+          });
+        });
+
+        // SW notification message handler
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'NOTIFICATION_ACTION') {
+              const { agentId, action } = event.data;
+              if (agentId) {
+                openModal(agentId);
+                if (action === 'approve' || action === 'reject') {
+                  sendApproval(action, null, agentId);
+                }
+              }
+            }
+          });
+        }
+      }
+
+      function init() {
+        applyTheme(state.theme);
+        initEventListeners();
+        setupWebPush();
+        connectWebSocket();
+
+        if (urlParams.get('relay') && urlParams.get('token')) {
+          localStorage.setItem('herdr_relay_url', state.relayUrl);
+          localStorage.setItem('herdr_relay_token', state.token);
+          showToast('Paired successfully');
+
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('relay');
+          cleanUrl.searchParams.delete('token');
+          history.replaceState(null, '', cleanUrl.toString());
+        }
+
+        if (state.selectedAgentId) {
+          openModal(state.selectedAgentId);
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>

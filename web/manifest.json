@@ -1,0 +1,19 @@
+{
+  "name": "herdr-outpost",
+  "short_name": "herdr",
+  "description": "Mobile-first dashboard to monitor and manage Herdr AI coding agent instances",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#12151b",
+  "theme_color": "#12151b",
+  "orientation": "any",
+  "categories": ["developer", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

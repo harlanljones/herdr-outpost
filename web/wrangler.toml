@@ -1,0 +1,8 @@
+name = "herdr-outpost"
+compatibility_date = "2024-01-01"
+
+# Cloudflare Workers Static Assets: serves web/ directly with no build step
+# and no Worker script required. Deploy with `wrangler deploy` from this
+# directory.
+[assets]
+directory = "."

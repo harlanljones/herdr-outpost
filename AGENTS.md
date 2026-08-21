@@ -10,8 +10,8 @@ Welcome to `herdr-outpost`. This document defines operating rules, component bou
 
 ### Core Architecture
 
-- **`relay/`**: Python async daemon bridging the local `herdr` socket/CLI and optional remote SSH hosts to WebSocket & HTTP clients. Includes authentication, origin checks, audit logging, push event consumption, and optional Telegram bot.
-- **`web/`**: Modern, zero-build web dashboard deployable to Cloudflare Workers (or any static host). Streams live terminal outputs, agent status, and interactive controls (prompt, approve, reject, interrupt).
+- **`relay/`**: Python async daemon bridging the local `herdr` socket/CLI and optional remote SSH hosts to WebSocket & HTTP clients. Includes authentication, origin checks, audit logging, push event consumption, session lifecycle reconciliation (2-miss grace period pruning and hook TTL expiry), liveness tracking, and optional Telegram bot.
+- **`web/`**: Modern, zero-build web dashboard deployable to Cloudflare Workers (or any static host) with path-based SPA routing (`/session/:id`). Streams live terminal outputs, agent status, and interactive controls (prompt, approve, reject, interrupt).
 - **`config/`**: Example configurations for Cloudflare Tunnel ingress and environment secrets.
 - **`tests/`**: Unit and integration tests for state management, relay protocols, and client payloads.
 
@@ -41,7 +41,7 @@ When executing non-trivial features or refactors, break work into independent, n
 
 ### Branding & Naming
 - Project name: **`herdr-outpost`** (never use `herdr-remote` in new docs, code, or configs).
-- Environment variables: Use `HERDR_OUTPOST_*` with fallback to `HERDR_*` for backward compatibility.
+- Environment variables: Use `HERDR_OUTPOST_*` with fallback to `HERDR_*` for backward compatibility (e.g. `HERDR_OUTPOST_SESSION_TTL=90` with fallback to `HERDR_SESSION_TTL` or `SESSION_TTL`).
 - Log directories: `~/.local/state/herdr-outpost/log` (Linux), `~/Library/Logs/herdr-outpost` (macOS), `%LOCALAPPDATA%\herdr-outpost\logs` (Windows).
 
 ### Python & Relay Guidelines
@@ -52,6 +52,7 @@ When executing non-trivial features or refactors, break work into independent, n
 
 ### Web Frontend Guidelines
 - Vanilla HTML/CSS/JavaScript with responsive layout for mobile and desktop.
+- Path-based session routing (`/session/:id`) with browser history navigation (`pushState`/`popstate`) and static host SPA fallback (`wrangler.toml`, `try_files`).
 - Dark & light mode support based on system preference and user toggle.
 - ANSI terminal rendering for high fidelity output from `herdr pane read --format ansi`.
 - Audio/haptic cues for state transitions (e.g., agent becomes `blocked` or `done`).
@@ -62,7 +63,10 @@ When executing non-trivial features or refactors, break work into independent, n
 
 ```bash
 # Run tests
-uv run --with pytest --with pytest-asyncio pytest tests/
+uv run --project relay --with pytest --with pytest-asyncio pytest tests/
+
+# Or run the test runner script
+./tests/run.sh
 
 # Start relay daemon locally
 cd relay && ./start.sh

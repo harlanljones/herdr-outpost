@@ -29,13 +29,16 @@ from websockets.asyncio.client import connect as ws_connect
 from websockets.asyncio.server import ServerConnection, serve as ws_serve
 
 from agent_state import (
+    agent_removed_message,
     agent_update_message,
     agents_snapshot_message,
     apply_agent_message,
     build_agent_id,
     complete_agent_update_message,
+    find_expired_agents,
     normalize_agent_dict,
     parse_agent_id,
+    reconcile_agent_state,
 )
 from probes import enrich as probe_enrich
 
@@ -106,6 +109,7 @@ CONFIG = {
     "poll_interval": float(get_env("POLL_INTERVAL", "3.0")),
     "output_interval": float(get_env("OUTPUT_INTERVAL", "2.0")),
     "output_lines": int(get_env("OUTPUT_LINES", "300")),
+    "session_ttl": float(get_env("SESSION_TTL", "90")),
     "vapid_private_key": get_env("VAPID_PRIVATE_KEY", ""),
     "vapid_public_key": get_env("VAPID_PUBLIC_KEY", ""),
     "vapid_claims_email": get_env("VAPID_CLAIMS_EMAIL", "mailto:admin@example.com"),
@@ -431,6 +435,8 @@ class HerdrRelayDaemon:
         self.output_subs: Dict[ServerConnection, Set[str]] = {}
         self.output_cursors: Dict[str, str] = {}
         self.output_locks: Dict[str, asyncio.Lock] = {}
+        self.miss_counts: Dict[str, Dict[str, int]] = {}
+        self.last_reconcile_at: Optional[str] = None
         self.lock = asyncio.Lock()
         self.internal_ws_port = CONFIG["port"] + 100
         self.running = False
@@ -623,6 +629,7 @@ class HerdrRelayDaemon:
         """Process an agent event, update state, trigger alerts if status changed, and broadcast."""
         async with self.lock:
             msg = complete_agent_update_message(raw_event, current=self.agents_state)
+            msg["agent"]["source"] = msg["agent"].get("source") or source
             agent = msg["agent"]
             agent_id = agent["id"]
             prev_status = self.agents_state.get(agent_id, {}).get("status", "unknown")
@@ -970,11 +977,18 @@ class HerdrRelayDaemon:
         resp_data: Dict[str, Any] = {}
 
         if method == "GET" and path in ("/health", "/healthz", "/api/health"):
+            async with self.lock:
+                agents_by_host: Dict[str, int] = {}
+                for agent in self.agents_state.values():
+                    host_key = str(agent.get("host") or "local")
+                    agents_by_host[host_key] = agents_by_host.get(host_key, 0) + 1
             resp_data = {
                 "status": "ok",
                 "service": "herdr-outpost-relay",
                 "version": "0.1.0",
                 "agents_count": len(self.agents_state),
+                "agents_by_host": agents_by_host,
+                "last_reconcile_at": self.last_reconcile_at,
                 "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
 
@@ -1078,28 +1092,88 @@ class HerdrRelayDaemon:
     # Background Herdr Polling Loop
     # -------------------------------------------------------------------------
 
+    async def _retire_agent(self, agent_id: str, client: str, reason: str) -> None:
+        """Release per-agent resources and broadcast/audit a removed session."""
+        self.output_cursors.pop(agent_id, None)
+        self.output_locks.pop(agent_id, None)
+        _host, _workspace, pane_id = parse_agent_id(agent_id)
+        self._pid_cache.pop(pane_id, None)
+        await self.broadcast_state(agent_removed_message(agent_id, reason))
+        audit_log(
+            action="agent_pruned",
+            client=client,
+            details={"agent_id": agent_id, "reason": reason},
+        )
+
     async def poll_herdr_agents(self) -> None:
-        """Periodically query herdr agent list locally and across configured SSH remotes."""
+        """Periodically query herdr agent list locally and across configured SSH remotes.
+
+        Each successful per-host poll is authoritative: agents for that host missing
+        from the listing for RECONCILE_GRACE consecutive successful polls are pruned
+        as closed. A TTL sweep after every full cycle expires silent hook/UDP-only
+        reporters. Failed polls skip reconciliation so a transient herdr error never
+        flushes live sessions.
+        """
         hosts = ["local"] + CONFIG["remotes"]
 
         while self.running:
-            try:
-                for host in hosts:
+            for host in hosts:
+                try:
                     code, out, _ = await self.execute_herdr_cmd(["agent", "list"], host=host)
+                    polled_ids: Set[str] = set()
+                    poll_ok = False
                     if code == 0 and out.strip():
                         try:
                             envelope = json.loads(out)
-                            agents = envelope.get("result", {}).get("agents", []) if isinstance(envelope, dict) else []
+                        except json.JSONDecodeError:
+                            envelope = None
+                        if isinstance(envelope, dict):
+                            poll_ok = True
+                            result = envelope.get("result")
+                            agents = result.get("agents", []) if isinstance(result, dict) else []
                             for p in agents:
                                 if isinstance(p, dict):
+                                    # Inject host/source BEFORE identity resolution so the
+                                    # polled id and the state-write id come from ONE
+                                    # normalization pass -- divergent id math here caused
+                                    # add/prune thrash against real herdr payloads
+                                    # (composite pane_id + workspace_id-only entries).
                                     p["host"] = host
                                     if host == "local":
                                         await self._enrich_local_agent(p)
+                                    polled_ids.add(normalize_agent_dict(p)["id"])
+                                    p["source"] = f"poll:{host}"
                                     await self.update_agent_status(p, source=f"poll:{host}")
-                        except json.JSONDecodeError:
-                            pass
+
+                    if poll_ok:
+                        async with self.lock:
+                            pruned_ids, self.miss_counts[host] = reconcile_agent_state(
+                                self.agents_state,
+                                polled_ids,
+                                host,
+                                self.miss_counts.get(host, {}),
+                            )
+                            for aid in pruned_ids:
+                                self.agents_state.pop(aid, None)
+                            self.last_reconcile_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+                        for aid in pruned_ids:
+                            logger.info(f"Agent pruned after missed polls: {aid} (host={host})")
+                            await self._retire_agent(aid, client=f"poll:{host}", reason="closed")
+                except Exception as err:
+                    logger.debug(f"Poll loop error for host {host}: {err}")
+
+            try:
+                async with self.lock:
+                    expired_ids = find_expired_agents(self.agents_state, CONFIG["session_ttl"])
+                    for aid in expired_ids:
+                        self.agents_state.pop(aid, None)
+
+                for aid in expired_ids:
+                    logger.info(f"Agent expired after session TTL: {aid}")
+                    await self._retire_agent(aid, client="ttl_sweep", reason="expired")
             except Exception as err:
-                logger.debug(f"Poll loop error: {err}")
+                logger.debug(f"TTL sweep error: {err}")
 
             await asyncio.sleep(CONFIG["poll_interval"])
 

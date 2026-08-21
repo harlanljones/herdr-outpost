@@ -110,9 +110,11 @@ self.addEventListener('notificationclick', (event) => {
 
   let targetUrl = './';
   if (agentId) {
-    targetUrl += `?agent=${encodeURIComponent(agentId)}`;
+    targetUrl = './session/' + encodeURIComponent(agentId);
     if (action && action !== 'open') {
-      targetUrl += `&action=${encodeURIComponent(action)}`;
+      const params = new URLSearchParams();
+      params.set('action', action);
+      targetUrl += '?' + params.toString();
     }
   }
 

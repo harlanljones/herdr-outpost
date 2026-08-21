@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import datetime
 import socket
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 VALID_STATUSES = {"blocked", "working", "done", "idle", "unknown"}
+
+# --- Session lifecycle defaults -------------------------------------------------
+# A polled agent must be absent from `herdr agent list` for RECONCILE_GRACE
+# consecutive successful polls before the relay considers it closed.
+RECONCILE_GRACE = 2
+# Hook/UDP-only agents (never present in an authoritative poll) expire once
+# their last observation is older than this.
+DEFAULT_SESSION_TTL_SECONDS = 90.0
 
 STATUS_MAP = {
     "blocked": "blocked",
@@ -108,6 +116,9 @@ def normalize_agent_dict(raw: Dict[str, Any], local_hostname: Optional[str] = No
         "pane_id": str(pane_id),
         "status": status,
         "status_reason": str(raw.get("status_reason") or raw.get("reason") or raw.get("message") or ""),
+        # --- Liveness: how the relay last heard about this session, and when ---
+        "source": str(raw.get("source") or ""),
+        "last_seen_at": now_iso,
         "agent_name": str(raw.get("agent_name") or raw.get("name") or "herdr-agent"),
         "tool_call": str(raw.get("tool_call") or raw.get("action") or ""),
         "last_message": str(raw.get("last_message") or raw.get("prompt") or ""),
@@ -195,6 +206,9 @@ def complete_agent_update_message(
         if partial.get("status") and partial["status"] != "unknown":
             merged["status"] = partial["status"]
         merged["updated_at"] = partial.get("updated_at") or merged.get("updated_at")
+        # last_seen_at is relay-local observation time: always refreshed on touch,
+        # never sourced from the payload.
+        merged["last_seen_at"] = partial.get("last_seen_at") or merged.get("last_seen_at")
         merged["id"] = agent_id
     else:
         merged = partial
@@ -256,5 +270,104 @@ def agents_snapshot_message(current: Dict[str, Dict[str, Any]]) -> Dict[str, Any
     return {
         "type": "agents_snapshot",
         "agents": list(current.values()),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+
+
+# -----------------------------------------------------------------------------
+# Session Lifecycle: Reconciliation & Expiry
+# -----------------------------------------------------------------------------
+
+def _parse_iso_ts(value: Any) -> Optional[datetime.datetime]:
+    """Parse an ISO-8601 timestamp string, returning None on any failure."""
+    try:
+        return datetime.datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _agent_ts(agent: Dict[str, Any]) -> Optional[datetime.datetime]:
+    """Best-effort observation timestamp for an agent: last_seen_at, then updated_at."""
+    ts = _parse_iso_ts(agent.get("last_seen_at")) or _parse_iso_ts(agent.get("updated_at"))
+    if ts is not None and ts.tzinfo is None:
+        ts = ts.replace(tzinfo=datetime.timezone.utc)
+    return ts
+
+
+def reconcile_agent_state(
+    current: Dict[str, Dict[str, Any]],
+    polled_ids: Set[str],
+    host: str,
+    miss_counts: Dict[str, int],
+    grace: int = RECONCILE_GRACE,
+) -> Tuple[List[str], Dict[str, int]]:
+    """Diff current in-memory agents against one authoritative poll for `host`.
+
+    Returns (pruned_agent_ids, next_miss_counts). Pure: the caller is
+    responsible for deleting pruned ids from `current` and cleaning up any
+    per-agent resources. Agents are pruned after `grace` consecutive missed
+    polls so a single failed/slow poll never flushes a live fleet.
+
+    `polled_ids` must contain composite ids exactly as produced by
+    build_agent_id(host, workspace, pane_id).
+    """
+    host = str(host)
+    polled = {str(a) for a in polled_ids}
+    host_agent_ids = {
+        aid for aid, ag in current.items()
+        if str(ag.get("host") or parse_agent_id(aid)[0]) == host
+    }
+
+    # Forget counters for sessions that no longer exist at all.
+    next_counts = {aid: n for aid, n in miss_counts.items() if aid in current}
+
+    pruned: List[str] = []
+    for aid in sorted(host_agent_ids):
+        if aid in polled:
+            next_counts[aid] = 0
+            continue
+        misses = next_counts.get(aid, 0) + 1
+        if misses >= grace:
+            pruned.append(aid)
+            next_counts.pop(aid, None)
+        else:
+            next_counts[aid] = misses
+
+    return pruned, next_counts
+
+
+def find_expired_agents(
+    current: Dict[str, Dict[str, Any]],
+    ttl_seconds: float = DEFAULT_SESSION_TTL_SECONDS,
+    now: Optional[datetime.datetime] = None,
+) -> List[str]:
+    """Return agent_ids whose last observation is older than `ttl_seconds`.
+
+    Covers hook/UDP-only reporters that never appear in an authoritative
+    `herdr agent list`. Entries without any parsable timestamp are never
+    expired (absence of evidence is not evidence of closure).
+    """
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    expired: List[str] = []
+    for aid, ag in current.items():
+        ts = _agent_ts(ag)
+        if ts is None:
+            continue
+        if (now - ts).total_seconds() > float(ttl_seconds):
+            expired.append(aid)
+    return sorted(expired)
+
+
+def agent_removed_message(agent_id: str, reason: str = "closed") -> Dict[str, Any]:
+    """Build the standard agent_removed broadcast for a pruned session."""
+    reason = "expired" if str(reason) == "expired" else "closed"
+    host, workspace, pane_id = parse_agent_id(str(agent_id))
+    return {
+        "type": "agent_removed",
+        "agent_id": str(agent_id),
+        "host": str(host),
+        "workspace": str(workspace),
+        "pane_id": str(pane_id),
+        "reason": reason,
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }

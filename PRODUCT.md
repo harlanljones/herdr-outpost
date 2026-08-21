@@ -9,7 +9,8 @@ web
 ## Stack
 
 Static HTML/CSS/JS, zero build step, deployed to Cloudflare Workers via `web/wrangler.toml`
-(`[assets] directory = "."`). Confirmed during shape: stay single-file (`web/index.html`).
+(`[assets] directory = "."`, `html_handling = "auto-trailing-slash"`, `not_found_handling = "single-page-application"`).
+Confirmed during shape: stay single-file (`web/index.html`) with client-side SPA routing (`/session/{id}`).
 
 ## Users
 
@@ -46,6 +47,9 @@ coding agents and multiple harnesses.
 - The relay (`relay/herdr_relay.py`) multiplexes HTTP + WebSocket on one port, plus a UDP event
   ingress (`relay/on_event.py`) fed by herdr plugin hooks. `relay/agent_state.py` is the single
   shared schema all transports normalize through (`normalize_agent_dict`).
+- Session lifecycle is authoritative and self-healing: closed agents absent from 2 consecutive
+  polls are pruned, while hook/UDP-only sessions expire after a TTL (`HERDR_OUTPOST_SESSION_TTL`,
+  default 90s). Pruned sessions emit `agent_removed` WebSocket broadcasts.
 - Deployment: Cloudflare Workers (static web) + Cloudflare Tunnel (relay), documented in
   `SCAFFOLD.md`; alternative static hosts and process runners also supported.
 
@@ -55,6 +59,8 @@ coding agents and multiple harnesses.
   arbitrary input to any agent, not read-only.
 - Confirmed: unblocking an agent (approve/reject/reply) must be possible without opening the
   terminal — it's the primary phone action.
+- Path-based session routing (`/session/{id}`) enables direct bookmarking, notification deep-linking,
+  and browser history navigation (pushState/popstate) directly into focused terminal sheets.
 - Per-session context-window usage is directly readable for Claude Code and cline via their local
   session files. antigravity-cli does not expose a readable per-session context figure (session
   data is protobuf inside SQLite); it exposes quota-window usage instead via a collector already
@@ -63,10 +69,10 @@ coding agents and multiple harnesses.
   available (context used/limit, or quota window %) or nothing.
 - Git repo/branch is derivable locally via `git -C <cwd>` for any agent whose cwd is on this
   machine.
-- The existing WebSocket message schema (`agent_update`, `agents_snapshot`) and its 13-field
-  agent shape in `relay/agent_state.py` is the extension point — new fields must be added there
-  first, per `AGENTS.md`'s "shared interface defined first" rule, then flow to relay callers and
-  the web client.
+- The existing WebSocket message schema (`agent_update`, `agents_snapshot`, `agent_removed`) and
+  its agent shape in `relay/agent_state.py` is the extension point — including observation provenance
+  (`source`) and timestamp (`last_seen_at`). New fields must be added there first, per `AGENTS.md`'s
+  "shared interface defined first" rule, then flow to relay callers and the web client.
 
 ## Brand Commitments
 

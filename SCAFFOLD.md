@@ -175,7 +175,7 @@ echo "HERDR_OUTPOST_RELAY_TOKEN=$TOKEN"  # Save this in your password manager!
 
 ### Step 5: Deploy Web App to Cloudflare Workers
 
-`web/wrangler.toml` already configures a Workers Static Assets project (no Worker script, no build step):
+`web/wrangler.toml` already configures a Workers Static Assets project (no Worker script, no build step), with SPA fallback so `/session/{id}` deep links serve the app:
 
 ```toml
 name = "herdr-outpost"
@@ -183,6 +183,8 @@ compatibility_date = "2024-01-01"
 
 [assets]
 directory = "."
+html_handling = "auto-trailing-slash"
+not_found_handling = "single-page-application"
 ```
 
 #### Option A: Deploy with Wrangler CLI (Fastest)
@@ -297,7 +299,10 @@ wscat -c wss://relay.example.com \
 # In the wscat console, type:
 # {"type":"agents"}
 
-# You should receive agent status
+# You should receive agent status. Each agent object includes liveness fields
+# ("source" e.g. poll:local/hook, and "last_seen_at"); when a session is pruned
+# (closed after 2 missed polls, or expired past HERDR_OUTPOST_SESSION_TTL) a
+# broadcast of type "agent_removed" is emitted with reason closed|expired.
 ```
 
 ### Step 9: Optional — Set Up Auto-Start
@@ -478,6 +483,12 @@ pkill -f herdr_relay
 cd herdr-outpost/relay && ./start.sh
 ```
 
+### Agents disappearing shortly after they stop
+
+**Cause:** Session reconciliation. An agent missing from two consecutive `herdr agent list` polls is pruned as `closed`; hook/UDP-only reporters (never listed by `herdr agent list`) expire after `HERDR_OUTPOST_SESSION_TTL` seconds (default 90, legacy fallback `HERDR_SESSION_TTL`). Pruned sessions broadcast an `agent_removed` message.
+
+**Fix:** This is expected lifecycle cleanup, not an error. To confirm reconciliation is running, check `/health` for `agents_by_host` and `last_reconcile_at`. To keep hook-reported sessions visible longer, raise `HERDR_OUTPOST_SESSION_TTL` in `config.env`.
+
 ---
 
 ## Monitoring & Maintenance
@@ -516,6 +527,13 @@ tail -f ~/Library/Logs/herdr-outpost/audit.log
 - Real-time logs: **Logs** → **Real-time Logs**
 
 ### Health Check
+
+The relay's own `/health` endpoint reports live session counts per host (`agents_by_host`) and the timestamp of the last reconciliation pass (`last_reconcile_at`):
+
+```bash
+curl -s -H "Authorization: Bearer $HERDR_OUTPOST_RELAY_TOKEN" \
+  https://relay.example.com/health | python3 -m json.tool
+```
 
 ```bash
 #!/bin/bash

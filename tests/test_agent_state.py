@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import os
 import sys
 
@@ -11,18 +12,41 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 from agent_state import (
+    DEFAULT_SESSION_TTL_SECONDS,
+    RECONCILE_GRACE,
     VALID_STATUSES,
     STATUS_MAP,
+    agent_removed_message,
     agent_update_message,
     agents_snapshot_message,
     apply_agent_message,
     build_agent_id,
     complete_agent_update_message,
+    find_expired_agents,
     get_default_hostname,
     normalize_agent_dict,
     normalize_status,
     parse_agent_id,
+    reconcile_agent_state,
 )
+
+
+def iso_utc(**offset_kwargs) -> str:
+    """ISO-8601 UTC timestamp offset from now by the given timedelta kwargs."""
+    return (
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(**offset_kwargs)
+    ).isoformat()
+
+
+def make_current_agent(agent_id: str) -> dict:
+    host, workspace, pane_id = parse_agent_id(agent_id)
+    return {
+        "id": agent_id,
+        "host": host,
+        "workspace": workspace,
+        "pane_id": pane_id,
+        "status": "working",
+    }
 
 
 class TestStatusNormalization:
@@ -438,3 +462,359 @@ class TestUpdateMergingAndSnapshots:
         assert snapshot["type"] == "agents_snapshot"
         assert len(snapshot["agents"]) == 2
         assert "timestamp" in snapshot
+
+
+class TestNormalizeLivenessFields:
+    """normalize_agent_dict must stamp relay-local liveness metadata."""
+
+    def test_normalize_defaults_source_and_last_seen_at(self):
+        normalized = normalize_agent_dict({"host": "h", "workspace": "w", "pane_id": "1"})
+
+        assert normalized["source"] == ""
+        assert isinstance(normalized["last_seen_at"], str) and normalized["last_seen_at"]
+        parsed = datetime.datetime.fromisoformat(normalized["last_seen_at"])
+        assert parsed.tzinfo is not None  # ISO UTC (aware)
+        # Stamped at normalization time, not taken from the payload
+        assert abs((datetime.datetime.now(datetime.timezone.utc) - parsed).total_seconds()) < 30
+
+    def test_normalize_source_passthrough_when_supplied(self):
+        normalized = normalize_agent_dict(
+            {"host": "h", "workspace": "w", "pane_id": "1", "source": "poll:local"}
+        )
+        assert normalized["source"] == "poll:local"
+
+    def test_last_seen_at_not_sourced_from_payload_timestamps(self):
+        """last_seen_at is relay-local observation time; payload updated_at/ts must not become it."""
+        raw = {
+            "host": "h",
+            "workspace": "w",
+            "pane_id": "1",
+            "updated_at": iso_utc(hours=-5),
+            "ts": iso_utc(hours=-6),
+        }
+        normalized = normalize_agent_dict(raw)
+        assert normalized["updated_at"] == raw["updated_at"]
+        assert normalized["last_seen_at"] != raw["updated_at"]
+
+
+class TestReconcileAgentState:
+    """Test host-scoped reconciliation with consecutive-miss grace."""
+
+    def test_constants(self):
+        assert RECONCILE_GRACE == 2
+        assert DEFAULT_SESSION_TTL_SECONDS == 90.0
+
+    def test_prune_after_grace_consecutive_misses(self):
+        current = {
+            "local:ws:1": make_current_agent("local:ws:1"),
+            "local:ws:2": make_current_agent("local:ws:2"),
+        }
+        counts: dict = {}
+
+        # First miss: below grace, survives with counter bumped
+        # (the seen agent's counter resets to an explicit 0)
+        pruned, counts = reconcile_agent_state(current, {"local:ws:1"}, "local", counts)
+        assert pruned == []
+        assert counts["local:ws:2"] == 1
+        assert counts["local:ws:1"] == 0
+
+        # Second consecutive miss: grace reached -> pruned and dropped from counts
+        pruned, counts = reconcile_agent_state(current, {"local:ws:1"}, "local", counts)
+        assert pruned == ["local:ws:2"]
+        assert "local:ws:2" not in counts
+        assert counts == {"local:ws:1": 0}
+
+    def test_no_prune_below_grace_single_miss(self):
+        current = {"local:ws:1": make_current_agent("local:ws:1")}
+        pruned, counts = reconcile_agent_state(current, set(), "local", {})
+        assert pruned == []
+        assert counts == {"local:ws:1": 1}
+
+    def test_counter_resets_when_seen_again_mid_streak(self):
+        """miss once, seen again, miss once -> agent still alive (grace holds)."""
+        current = {"local:ws:1": make_current_agent("local:ws:1")}
+
+        pruned, counts = reconcile_agent_state(current, set(), "local", {})
+        assert pruned == [] and counts == {"local:ws:1": 1}
+
+        pruned, counts = reconcile_agent_state(current, {"local:ws:1"}, "local", counts)
+        assert pruned == [] and counts == {"local:ws:1": 0}
+
+        pruned, counts = reconcile_agent_state(current, set(), "local", counts)
+        assert pruned == [] and counts == {"local:ws:1": 1}
+        assert "local:ws:1" in current
+
+    def test_host_scoping_ignores_other_hosts(self):
+        """An agent on another host is never reset nor pruned by this host's poll,
+        even if its composite id somehow appears in polled_ids."""
+        # Reconciling host local must not count/reset/prune remote agents
+        current = {
+            "local:ws:2": make_current_agent("local:ws:2"),
+            "remote:ws:9": make_current_agent("remote:ws:9"),
+        }
+        counts: dict = {}
+        all_pruned: list = []
+        for _ in range(RECONCILE_GRACE + 1):
+            pruned, counts = reconcile_agent_state(current, {"remote:ws:9"}, "local", counts)
+            all_pruned.extend(pruned)
+
+        assert "local:ws:2" in all_pruned        # local agent hit grace within the cycles
+        assert "remote:ws:9" not in counts       # remote agent never tracked by this poll
+        assert "remote:ws:9" not in all_pruned   # ...and never pruned/reset
+        assert "remote:ws:9" in current
+
+    def test_garbage_collects_stale_counters(self):
+        """Counters for ids no longer present in `current` are dropped."""
+        current = {"local:ws:1": make_current_agent("local:ws:1")}
+        stale_counts = {"local:gone:5": 3, "remote:x:2": 1}
+
+        pruned, counts = reconcile_agent_state(current, {"local:ws:1"}, "local", stale_counts)
+        assert pruned == []
+        assert counts == {"local:ws:1": 0}
+
+    def test_purity_does_not_mutate_inputs(self):
+        current = {
+            "local:ws:1": make_current_agent("local:ws:1"),
+            "local:ws:2": make_current_agent("local:ws:2"),
+        }
+        snapshot = {k: dict(v) for k, v in current.items()}
+        counts = {"local:ws:2": 1}
+
+        pruned, next_counts = reconcile_agent_state(current, set(), "local", counts)
+
+        assert pruned == ["local:ws:2"]
+        # current untouched
+        assert current == snapshot
+        assert len(current) == 2
+        # input counts untouched; results are new objects
+        assert counts == {"local:ws:2": 1}
+        assert next_counts is not counts
+
+    def test_seen_agents_reset_to_zero(self):
+        current = {"local:ws:1": make_current_agent("local:ws:1")}
+        pruned, counts = reconcile_agent_state(current, {"local:ws:1"}, "local", {"local:ws:1": 1})
+        assert pruned == []
+        assert counts == {"local:ws:1": 0}
+
+    def test_custom_grace_honored(self):
+        current = {"local:ws:1": make_current_agent("local:ws:1")}
+        counts = {}
+        for i in range(3):
+            pruned, counts = reconcile_agent_state(current, set(), "local", counts, grace=4)
+            assert pruned == []
+            assert counts == {"local:ws:1": i + 1}
+        pruned, counts = reconcile_agent_state(current, set(), "local", counts, grace=4)
+        assert pruned == ["local:ws:1"]
+        assert counts == {}
+
+
+class TestFindExpiredAgents:
+    """Test TTL-based expiry sweep over last observation timestamps."""
+
+    def test_fresh_agent_survives(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        current = {
+            "local:w:1": {**make_current_agent("local:w:1"), "last_seen_at": iso_utc(seconds=-10)}
+        }
+        assert find_expired_agents(current, ttl_seconds=90.0, now=now) == []
+
+    def test_stale_last_seen_at_expires(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        current = {
+            "local:w:1": {**make_current_agent("local:w:1"), "last_seen_at": iso_utc(seconds=-301)},
+            "local:w:2": {**make_current_agent("local:w:2"), "last_seen_at": iso_utc(seconds=-89)},
+        }
+        expired = find_expired_agents(current, ttl_seconds=90.0, now=now)
+        assert expired == ["local:w:1"]
+
+    def test_falls_back_to_updated_at(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        current = {
+            "local:w:1": {**make_current_agent("local:w:1"), "updated_at": iso_utc(minutes=-5)},
+            "local:w:2": {**make_current_agent("local:w:2"), "updated_at": iso_utc(seconds=-1)},
+        }
+        assert find_expired_agents(current, ttl_seconds=90.0, now=now) == ["local:w:1"]
+
+    def test_last_seen_at_wins_over_updated_at(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        current = {
+            "local:w:1": {
+                **make_current_agent("local:w:1"),
+                "updated_at": iso_utc(hours=-2),      # stale...
+                "last_seen_at": iso_utc(seconds=-5),  # ...but recently observed
+            },
+        }
+        assert find_expired_agents(current, ttl_seconds=90.0, now=now) == []
+
+    @pytest.mark.parametrize("bad_ts", [None, "", "not-a-timestamp", 12345, [], {}])
+    def test_missing_or_garbage_timestamps_never_expire(self, bad_ts):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        entry = make_current_agent("local:w:1")
+        if bad_ts is not None:
+            entry["last_seen_at"] = bad_ts
+        current = {"local:w:1": entry}
+
+        assert find_expired_agents(current, ttl_seconds=0.001, now=now) == []
+
+    def test_naive_timestamp_treated_as_utc(self):
+        """A timestamp without tzinfo must be interpreted as UTC, not local time."""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        naive_utc_str = (
+            (now - datetime.timedelta(seconds=600))
+            .replace(tzinfo=None)  # strip tz -> naive UTC wall clock
+            .isoformat()
+        )
+        current = {"local:w:1": {**make_current_agent("local:w:1"), "last_seen_at": naive_utc_str}}
+
+        # 600s old > 90s ttl when read as UTC -> expires regardless of machine TZ
+        assert find_expired_agents(current, ttl_seconds=90.0, now=now) == ["local:w:1"]
+
+    def test_custom_ttl_honored(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        current = {
+            "local:w:1": {**make_current_agent("local:w:1"), "last_seen_at": iso_utc(seconds=-15)},
+            "local:w:2": {**make_current_agent("local:w:2"), "last_seen_at": iso_utc(seconds=-25)},
+        }
+
+        assert find_expired_agents(current, ttl_seconds=20.0, now=now) == ["local:w:2"]
+        assert find_expired_agents(current, ttl_seconds=10.0, now=now) == ["local:w:1", "local:w:2"]
+        assert find_expired_agents(current, ttl_seconds=100.0, now=now) == []
+
+    def test_deterministic_sorted_output(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        current = {
+            "local:w:c": {**make_current_agent("local:w:c"), "last_seen_at": iso_utc(hours=-3)},
+            "remote:h:a": {**make_current_agent("remote:h:a"), "last_seen_at": iso_utc(days=-1)},
+            "local:w:b": {**make_current_agent("local:w:b"), "last_seen_at": iso_utc(hours=-1)},
+        }
+        expired = find_expired_agents(current, ttl_seconds=90.0, now=now)
+
+        assert expired == sorted(expired)
+        assert expired == ["local:w:b", "local:w:c", "remote:h:a"]
+
+    def test_default_ttl_value(self):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        boundary = now - datetime.timedelta(seconds=DEFAULT_SESSION_TTL_SECONDS + 1)
+        current = {"local:w:1": {**make_current_agent("local:w:1"), "last_seen_at": boundary.isoformat()}}
+
+        # No explicit ttl/now beyond the timestamp: uses DEFAULT_SESSION_TTL_SECONDS
+        assert find_expired_agents(current, now=now) == ["local:w:1"]
+
+
+class TestAgentRemovedMessage:
+    """Test the canonical agent_removed broadcast shape."""
+
+    def test_shape_and_fields_default_reason(self):
+        before = datetime.datetime.now(datetime.timezone.utc)
+        msg = agent_removed_message("local:core:pane_3")
+
+        assert msg["type"] == "agent_removed"
+        assert msg["agent_id"] == "local:core:pane_3"
+        assert msg["host"] == "local"
+        assert msg["workspace"] == "core"
+        assert msg["pane_id"] == "pane_3"
+        assert msg["reason"] == "closed"
+        ts = datetime.datetime.fromisoformat(msg["timestamp"])
+        assert ts.tzinfo is not None
+        assert before <= ts <= datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=5)
+
+    def test_composite_id_parsing_variants(self):
+        two_part = agent_removed_message("gpu-box:sessions")
+        assert (two_part["host"], two_part["workspace"], two_part["pane_id"]) == ("gpu-box", "default", "sessions")
+
+        single_part = agent_removed_message("pane_only")
+        assert (single_part["host"], single_part["workspace"], single_part["pane_id"]) == ("local", "default", "pane_only")
+
+        colon_pane = agent_removed_message("host:ws:pane:sub:1")
+        assert colon_pane["host"] == "host"
+        assert colon_pane["workspace"] == "ws"
+        assert colon_pane["pane_id"] == "pane:sub:1"
+
+    def test_reason_coercion_expired(self):
+        msg = agent_removed_message("local:ws:1", reason="expired")
+        assert msg["reason"] == "expired"
+
+    def test_reason_coercion_anything_else_becomes_closed(self):
+        for reason in ("closed", "", "crashed", None, "EXPIRED", 42):
+            msg = agent_removed_message("local:ws:1", reason=reason)
+            assert msg["reason"] == "closed"
+
+
+class TestMergeRefreshesLastSeenAt:
+    """complete_agent_update_message refreshes last_seen_at on every touch."""
+
+    def test_second_update_refreshes_last_seen_at_without_payload_timestamps(self):
+        first_seen = iso_utc(minutes=-10)
+        current_state = {
+            "local:core:1": {
+                "id": "local:core:1",
+                "host": "local",
+                "workspace": "core",
+                "pane_id": "1",
+                "status": "working",
+                "last_seen_at": first_seen,
+            }
+        }
+
+        event_one = {"host": "local", "workspace": "core", "pane_id": "1", "status": "working"}
+        result_one = complete_agent_update_message(event_one, current=current_state)
+        refreshed_one = result_one["agent"]["last_seen_at"]
+
+        event_two = {"host": "local", "workspace": "core", "pane_id": "1", "status": "blocked"}
+        result_two = complete_agent_update_message(event_two, current=current_state)
+        refreshed_two = result_two["agent"]["last_seen_at"]
+
+        # Payload omitted timestamps entirely: last_seen_at still moves forward
+        assert refreshed_one != first_seen
+        assert datetime.datetime.fromisoformat(refreshed_one).tzinfo is not None
+        assert refreshed_two >= refreshed_one
+
+    def test_touch_refreshes_both_timestamps(self):
+        """Both observation clocks refresh on every touch: updated_at falls back to
+        relay time when the payload omits timestamps, and last_seen_at is always ours."""
+        original_updated = iso_utc(hours=-1)
+        original_seen = iso_utc(minutes=-1)
+        current_state = {
+            "local:core:1": {
+                **make_current_agent("local:core:1"),
+                "updated_at": original_updated,
+                "last_seen_at": original_seen,
+            }
+        }
+        event = {"host": "local", "workspace": "core", "pane_id": "1", "status": "working"}
+
+        merged = complete_agent_update_message(event, current=current_state)["agent"]
+
+        assert merged["updated_at"] != original_updated
+        assert merged["last_seen_at"] != original_seen
+        for key in ("updated_at", "last_seen_at"):
+            parsed = datetime.datetime.fromisoformat(merged[key])
+            assert parsed.tzinfo is not None
+            assert abs((datetime.datetime.now(datetime.timezone.utc) - parsed).total_seconds()) < 30
+
+    def test_merge_preserves_source_from_current_when_payload_omits_it(self):
+        current_state = {
+            "local:core:1": {
+                **make_current_agent("local:core:1"),
+                "source": "poll:local",
+                "last_seen_at": iso_utc(minutes=-1),
+            }
+        }
+        event = {"host": "local", "workspace": "core", "pane_id": "1", "status": "done"}
+
+        merged = complete_agent_update_message(event, current=current_state)["agent"]
+
+        assert merged["source"] == "poll:local"
+
+    def test_new_agent_gets_source_and_last_seen_at(self):
+        event = {
+            "host": "local",
+            "workspace": "new",
+            "pane_id": "7",
+            "status": "working",
+            "source": "udp:192.168.1.5",
+        }
+        merged = complete_agent_update_message(event)["agent"]
+
+        assert merged["source"] == "udp:192.168.1.5"
+        assert datetime.datetime.fromisoformat(merged["last_seen_at"]).tzinfo is not None

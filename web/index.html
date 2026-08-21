@@ -1973,7 +1973,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
         // Fleet Data & Filters
         agents: [],
-        selectedAgentId: urlParams.get('agent') || null,
+        selectedAgentId: null,
         pendingAction: urlParams.get('action') || null,
         activeStatusFilter: 'all',
         searchQuery: '',
@@ -1998,6 +1998,47 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         lastFocusedElement: null,
         debouncedActions: new Set(),
       };
+
+      // ======================================================================
+      // Router (Path-Based Session Links)
+      // ======================================================================
+      function parseRoute(pathname) {
+        const match = /^\/session\/([^\/]+)\/*$/.exec(pathname || '');
+        if (match) {
+          let agentId = match[1];
+          try {
+            agentId = decodeURIComponent(agentId);
+          } catch (e) {}
+          return { view: 'session', agentId: agentId };
+        }
+        return { view: 'fleet' };
+      }
+
+      function sessionPath(agentId) {
+        return '/session/' + encodeURIComponent(String(agentId)) + window.location.search;
+      }
+
+      function navigate(path, replace) {
+        try {
+          if (replace && typeof history.replaceState === 'function') {
+            history.replaceState(null, '', path);
+          } else if (typeof history.pushState === 'function') {
+            history.pushState(null, '', path);
+          }
+        } catch (e) {}
+        applyRoute();
+      }
+
+      function applyRoute() {
+        const route = parseRoute(window.location.pathname);
+        if (route.view === 'session' && route.agentId) {
+          if (state.selectedAgentId !== route.agentId) {
+            openModal(route.agentId, { fromRoute: true });
+          }
+        } else if (document.getElementById('terminalModal').classList.contains('open')) {
+          closeModal({ fromRoute: true });
+        }
+      }
 
       // ======================================================================
       // Sound Synthesizer (Zero Dependencies)
@@ -2970,12 +3011,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       // ======================================================================
       // Terminal Sheet Controller
       // ======================================================================
-      window.openModal = function(agentId) {
+      window.openModal = function(agentId, opts) {
         state.lastFocusedElement = document.activeElement;
         const agent = state.agents.find(a =>
           a.id === agentId || String(a.paneId) === String(agentId) || a.id.endsWith(':' + agentId)
         );
         state.selectedAgentId = agent ? agent.id : agentId;
+
+        if (!opts || !opts.fromRoute) {
+          try {
+            if (typeof history.pushState === 'function') {
+              history.pushState(null, '', sessionPath(state.selectedAgentId));
+            }
+          } catch (e) {}
+        }
+
         const modal = document.getElementById('terminalModal');
         modal.classList.add('open');
 
@@ -3000,7 +3050,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         }
       };
 
-      function closeModal() {
+      function closeModal(opts) {
         const modal = document.getElementById('terminalModal');
         modal.classList.remove('open');
         unsubscribeOutputStream();
@@ -3008,6 +3058,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         state.selectedAgentId = null;
         if (state.lastFocusedElement && typeof state.lastFocusedElement.focus === 'function') {
           state.lastFocusedElement.focus();
+        }
+
+        if (!opts || !opts.fromRoute) {
+          if (parseRoute(window.location.pathname).view !== 'fleet') {
+            navigate('/' + window.location.search);
+          }
         }
       }
 
@@ -3405,6 +3461,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           showToast('Network connection lost', 'error');
         });
 
+        // History Navigation (Session Routing)
+        window.addEventListener('popstate', applyRoute);
+
         // Theme Toggle
         document.getElementById('themeToggleBtn').addEventListener('click', () => {
           applyTheme(state.theme === 'dark' ? 'light' : 'dark');
@@ -3595,9 +3654,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           history.replaceState(null, '', cleanUrl.toString());
         }
 
-        if (state.selectedAgentId) {
-          openModal(state.selectedAgentId);
+        // Migrate legacy ?agent= deep links to path-based session routes
+        const legacyAgent = urlParams.get('agent');
+        if (legacyAgent) {
+          const migrated = new URL(window.location.href);
+          migrated.searchParams.delete('agent');
+          history.replaceState(null, '', '/session/' + encodeURIComponent(legacyAgent) + migrated.search);
         }
+
+        applyRoute();
       }
 
       if (document.readyState === 'loading') {

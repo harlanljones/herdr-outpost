@@ -75,18 +75,20 @@ A disciplined 3-tier ramp with strict $\ge 1.25$ ratio between steps:
 
 ### 4. Terminal Sheet / Docked Desktop Side Panel
 - Modal sheet on mobile (<1024px), persistent side panel on desktop (>=1024px).
+- **Path-Based Session Routing**: First-class URL routing (`/session/{id}`) mapping to individual agent sheets. History push/pop (`pushState`/`popstate`) syncs sheet open/close state with the browser back button and enables SPA fallback on static hosts.
 - Modal focus trap retaining keyboard navigation within the dialog and restoring focus to the trigger element on close.
-- Collapsible telemetry drawer displaying exact harness, version, model, context used/limit, repo, branch, dirty flag, PID, pane ID, CWD.
+- Collapsible telemetry drawer displaying exact harness, version, model, context used/limit, repo, branch, dirty flag, PID, pane ID, CWD, and observation metadata (`source`, `last_seen_at`).
 - Live ANSI terminal console with autoscroll toggle, copy, clear controls, and memory-safe buffer capping (250KB / 2,000 lines).
 - Interactive quick keys bar (↵ Enter, ⎋ Esc, ⌃C Interrupt, ␣ Space, ⇥ Tab, ↑ Up, ↓ Down).
 - Command prompt input with 16px font floor to prevent mobile browser auto-zoom.
 
 ### 5. Settings & Device Pairing
 - Instant QR-code mobile pairing with automatic URL token persistence and URL scrubbing.
-- Web Push notifications integration with VAPID negotiation and Service Worker offline caching.
+- Web Push notifications integration with VAPID negotiation, Service Worker offline caching, and direct notification click deep-linking (`/session/{id}?action={action}`).
 - Web Audio synthesizer tone engine for audible annunciator cues.
 - Live connection diagnostics log.
 
-### 6. Context-Aware Empty & Filter States
+### 6. Context-Aware Empty, Filter & Lifecycle States
 - Distinct empty states for initial connection waiting, zero search results (with "Clear Search" CTA), and zero status filter matches (with "Show All Agents" CTA).
 - Diacritic and case-normalized Unicode search across harness, model, repo, branch, cwd, task, and host.
+- **Session Lifecycle & Pruning**: Responds to real-time `agent_removed` broadcasts when sessions close (2 consecutive missed polls) or expire (hook TTL), cleanly tearing down active subscriptions and closing terminal sheets if the active session terminates.

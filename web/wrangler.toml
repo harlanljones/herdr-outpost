@@ -2,7 +2,10 @@ name = "herdr-outpost"
 compatibility_date = "2024-01-01"
 
 # Cloudflare Workers Static Assets: serves web/ directly with no build step
-# and no Worker script required. Deploy with `wrangler deploy` from this
-# directory.
+# and no Worker script required. SPA fallback (not_found_handling) makes deep
+# links like /session/{id} serve index.html. Deploy with `wrangler deploy`
+# from this directory.
 [assets]
 directory = "."
+html_handling = "auto-trailing-slash"
+not_found_handling = "single-page-application"

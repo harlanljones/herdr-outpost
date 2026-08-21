@@ -29,6 +29,8 @@
 - [Telegram Bot Setup](#-telegram-bot-setup)
 - [Web Push (VAPID) Setup](#-web-push-vapid-setup)
 - [Multi-Host & SSH Agent Monitoring](#-multi-host--ssh-agent-monitoring)
+- [Live Agent Telemetry (harness, model, context, git)](#live-agent-telemetry-harness-model-context-git)
+- [Session Deep Links & Lifecycle](#-session-deep-links--lifecycle)
 - [Security & Hardening Best Practices](#-security--hardening-best-practices)
 - [Alternative Deployment Platforms](#-alternative-deployment-platforms)
 - [Automated Testing & QA](#-automated-testing--qa)
@@ -84,6 +86,8 @@
 ## Key Features
 
 - **Mobile-First Triage & Annunciator Panel**: Management-by-exception board with an instant top ALARM strip for one-touch approvals (`✓ Approve`, `✕ Reject`, quick response chips `y`, `yes`, `always allow`) without opening a full terminal.
+- **Path-Based Session Deep Links (`/session/{id}`)**: First-class URL routing with browser history support (`pushState`/`popstate`), direct push notification navigation, and zero-config SPA fallback.
+- **Session Lifecycle & Automatic Reconciliation**: Multi-host polling reconciles active sessions against `herdr agent list` (2-miss grace period pruning) and expires hook/UDP sessions after a configurable TTL (`HERDR_OUTPOST_SESSION_TTL`), broadcasting real-time `agent_removed` events.
 - **Zero-Build Web UI**: Instant static dashboard deployable directly to Cloudflare Workers (or any static host).
 - **High-Fidelity ANSI Streaming & Buffer Capping**: Terminal pane streaming with rich color ANSI parsing and memory-safe buffer management.
 - **Interactive Control & Action Debouncing**: Prompt agents, send text, approve actions, reject actions, or interrupt running tasks from any browser with duplicate-click protection.
@@ -353,6 +357,81 @@ must never break the harness it's reporting from.
 
 ---
 
+## 🔗 Session Deep Links & Lifecycle
+
+### Routes
+
+| Route | View |
+|---|---|
+| `/` | Fleet view — all agents across all hosts. |
+| `/session/{id}` | Terminal sheet focused on a single agent. |
+
+The `{id}` path segment is the composite agent id `host:workspace:pane`, percent-encoded — e.g. agent `local:myrepo:3` lives at `/session/local%3Amyrepo%3A3`. Opening a deep link reconnects the dashboard and focuses that session's terminal sheet once its agent appears in the snapshot; pressing the browser **Back** button closes the sheet and returns to the fleet view (history state is pushed/popped). Web Push notification clicks navigate straight to their `/session/{id}` deep link.
+
+Because these are client-side routes, any static host must fall back to `index.html` for unknown paths:
+
+| Host | SPA fallback recipe |
+|---|---|
+| **Cloudflare Workers** *(default, shipped)* | Already configured in `web/wrangler.toml`: `not_found_handling = "single-page-application"` under `[assets]`. |
+| **nginx** | Inside your `server` block: `location / { try_files $uri /index.html; }` |
+| **Caddy** | In your site block: `try_files {path} /index.html` |
+| **GitHub Pages** | Copy `index.html` to `404.html` so unknown paths render the app. |
+
+### Closed Sessions & Reconciliation
+
+The relay reconciles its session table against the authoritative `herdr agent list` on every poll cycle:
+
+- **Closed**: an agent absent from two consecutive successful polls is pruned.
+- **Expired**: agents reported only through hook/UDP event ingress (never listed by `herdr agent list`) are dropped after a time-to-live with no fresh observation.
+- The TTL is set with `HERDR_OUTPOST_SESSION_TTL` (legacy fallback `HERDR_SESSION_TTL`), a float number of seconds, defaulting to `90`.
+
+Add to `config.env` alongside the other relay settings:
+
+```bash
+# Seconds a hook/UDP-only session survives without a fresh observation
+HERDR_OUTPOST_SESSION_TTL=90
+```
+
+### WebSocket Schema Additions
+
+Every normalized agent object now carries liveness metadata:
+
+```json
+{
+  "id": "local:myrepo:3",
+  "source": "poll:local",
+  "last_seen_at": "2026-08-21T12:00:00.123456+00:00"
+}
+```
+
+- `source` — how the relay last heard about this session (`poll:local`, `poll:<remote-host>`, `hook`, …).
+- `last_seen_at` — ISO 8601 UTC timestamp of the relay's most recent observation of the session.
+
+Pruned sessions broadcast an `agent_removed` message:
+
+```json
+{
+  "type": "agent_removed",
+  "agent_id": "local:myrepo:3",
+  "host": "local",
+  "workspace": "myrepo",
+  "pane_id": "3",
+  "reason": "closed",
+  "timestamp": "2026-08-21T12:05:00+00:00"
+}
+```
+
+`reason` is `"closed"` (missing from two consecutive polls) or `"expired"` (hook-only source past TTL).
+
+### Health Endpoint Additions
+
+`GET /health` now additionally reports:
+
+- `agents_by_host` — current agent count keyed by host.
+- `last_reconcile_at` — ISO 8601 timestamp of the last successful reconciliation pass.
+
+---
+
 ## Security & Hardening Best Practices
 
 - **Never Log Secrets**: The relay automatically scrubs tokens via `scrub()`. Never print unredacted credentials to stdout.
@@ -407,7 +486,7 @@ Run the test suite using `uv`:
 
 ```bash
 # Run all tests
-uv run --with pytest --with pytest-asyncio pytest tests/
+uv run --project relay --with pytest --with pytest-asyncio pytest tests/
 
 # Or use the test runner script
 ./tests/run.sh

@@ -703,6 +703,20 @@ class HerdrRelayDaemon:
     # CLI and SSH Execution
     # -------------------------------------------------------------------------
 
+    # Wire-protocol control sequences -> herdr send-keys key names.
+    SPECIAL_KEY_NAMES = {
+        "\n": ["enter"],
+        "\r": ["enter"],
+        "\x1b": ["escape"],
+        " ": ["space"],
+        "\t": ["tab"],
+        "\x1b[A": ["up"],
+        "\x1b[B": ["down"],
+        "\x1b[C": ["right"],
+        "\x1b[D": ["left"],
+    }
+
+
     async def execute_herdr_cmd(self, args: List[str], host: str = "local") -> Tuple[int, str, str]:
         """Execute a herdr CLI command locally or over SSH."""
         if not host or host == "local":
@@ -752,21 +766,37 @@ class HerdrRelayDaemon:
 
         elif action in ("send_keys", "send_text", "respond"):
             keys = str(params.get("keys") or params.get("text") or "")
-            code, out, err = await self.execute_herdr_cmd(["agent", "send-keys", pane_id, keys], host=host)
-            if code != 0:
-                code, out, err = await self.execute_herdr_cmd(["pane", "send-keys", pane_id, keys], host=host)
-            return {"success": code == 0, "output": out, "error": err}
+            special = SPECIAL_KEY_NAMES.get(keys)
+            if special:
+                # Pure control sequence: send as named keys.
+                code, out, err = await self.execute_herdr_cmd(["pane", "send-keys", pane_id] + special, host=host)
+                return {"success": code == 0, "output": out, "error": err}
+            if not keys:
+                return {"success": False, "error": "no keys provided"}
+
+            # herdr's send-keys only accepts key names; literal text must go
+            # through `pane send-text`. A trailing newline means "press Enter".
+            text = keys[:-1] if keys.endswith("\n") else keys
+            results = []
+            if text:
+                results.append(await self.execute_herdr_cmd(["pane", "send-text", pane_id, text], host=host))
+            if keys.endswith("\n") or not text:
+                results.append(await self.execute_herdr_cmd(["pane", "send-keys", pane_id, "enter"], host=host))
+            ok = all(code == 0 for code, _o, _e in results)
+            out = "\n".join(o for _c, o, _e in results if o).strip()
+            err = "; ".join(e for _c, _o, e in results if e).strip()
+            return {"success": ok, "output": out, "error": err}
 
         elif action == "approve":
-            code, out, err = await self.execute_herdr_cmd(["agent", "approve", pane_id], host=host)
-            if code != 0:
-                code, out, err = await self.execute_herdr_cmd(["pane", "send-keys", pane_id, "y\n"], host=host)
+            # herdr has no native approve command; emulate with "y" + Enter.
+            code, out, err = await self.execute_herdr_cmd(["pane", "send-text", pane_id, "y"], host=host)
+            if code == 0:
+                code, out2, err2 = await self.execute_herdr_cmd(["pane", "send-keys", pane_id, "enter"], host=host)
+                err = err or err2
             return {"success": code == 0, "output": out, "error": err}
 
         elif action == "reject":
-            code, out, err = await self.execute_herdr_cmd(["agent", "reject", pane_id], host=host)
-            if code != 0:
-                code, out, err = await self.execute_herdr_cmd(["pane", "send-keys", pane_id, "\x1b"], host=host)
+            code, out, err = await self.execute_herdr_cmd(["pane", "send-keys", pane_id, "escape"], host=host)
             return {"success": code == 0, "output": out, "error": err}
 
         elif action == "interrupt":

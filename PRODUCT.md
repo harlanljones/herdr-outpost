@@ -1,4 +1,4 @@
-# Product
+# Product — 1.0.0
 
 <!-- impeccable:product-schema 1 -->
 
@@ -15,7 +15,7 @@ Confirmed during shape: stay single-file (`web/index.html`) with client-side SPA
 ## Users
 
 The operator (Harlan) running several AI coding agents (Claude Code, cline, antigravity-cli)
-concurrently across local repos via [herdr](https://herdr.dev), a terminal workspace manager.
+concurrently across local repos via [Herdr](https://herdr.dev), a terminal workspace manager.
 The primary situation is checking on the fleet from a phone — mid-day, away from the desk —
 to see which agent is blocked and needs a decision, and to unblock or reply without opening a
 full terminal.
@@ -36,8 +36,8 @@ coding agents and multiple harnesses.
 
 ## Operating Context
 
-- Agents run inside `herdr` panes on one machine (confirmed scale: 2–8 agents, one host; SSH
-  remote hosts are supported by the relay but out of scope for this revamp's probes).
+- Agents run inside Herdr panes on one machine (confirmed scale: 2–8 agents, one host); SSH
+  remote hosts are supported by the relay.
 - Three harnesses in active use on this machine: Claude Code (`~/.claude/projects/*.jsonl`),
   cline (`~/.cline/data/sessions/*`), antigravity-cli (`~/.gemini/antigravity-cli/`).
 - `herdr agent list` polled by the relay every 3s returns per-pane `agent` (harness), `cwd`,
@@ -45,11 +45,15 @@ coding agents and multiple harnesses.
 - Every pane has `$HERDR_PANE_ID` in its environment — usable by an in-pane reporter for exact
   pane↔session identity.
 - The relay (`relay/herdr_relay.py`) multiplexes HTTP + WebSocket on one port, plus a UDP event
-  ingress (`relay/on_event.py`) fed by herdr plugin hooks. `relay/agent_state.py` is the single
+  ingress (`relay/on_event.py`) fed by Herdr event hooks and optional reporters. `relay/agent_state.py` is the single
   shared schema all transports normalize through (`normalize_agent_dict`).
 - Session lifecycle is authoritative and self-healing: closed agents absent from 2 consecutive
   polls are pruned, while hook/UDP-only sessions expire after a TTL (`HERDR_OUTPOST_SESSION_TTL`,
   default 90s). Pruned sessions emit `agent_removed` WebSocket broadcasts.
+- For the exact unreliable Herdr result `blocked` + `screen_detection_skipped: true` + no
+  `agent_session`, the relay asks Herdr's active screen manifest to classify a fresh detection
+  snapshot. Successful `working`, `idle`, or `blocked` results replace the stale state; failures
+  retain the original unverified block.
 - Deployment: Cloudflare Workers (static web) + Cloudflare Tunnel (relay), documented in
   `SCAFFOLD.md`; alternative static hosts and process runners also supported.
 
@@ -79,18 +83,13 @@ coding agents and multiple harnesses.
 - Name: **herdr-outpost**. Existing logo asset: `web/logo.svg` (gradient mark, cyan → blue →
   violet, matching status colors). Kept as-is; the mark's use in the surface may be restyled, but
   the asset itself is not being redrawn as part of this brief.
-- Footer previously linked the retired upstream repo name (`dcolinmorgan/herdr-remote`); that is
-  a defect to fix, not a brand commitment to preserve.
+- Public links and copy use the `herdr-outpost` name and point to the current repository.
 
-## Evidence on Hand
+## Release Evidence
 
-- Live on this machine at plan time: 2 Claude Code agents in `herdr-outpost` (one on `main`),
-  1 cline agent in `urban-development`, 1 cline agent in `latent-roast`. Real repo names, real
-  branch, real task titles (from `terminal_title_stripped`) — usable as authentic demonstration
-  content during the build rather than invented placeholder agents.
-- `herdr agent list`, `herdr pane process-info`, `herdr pane get` JSON shapes captured directly
-  from this machine (see shape-round tool output) — the ground truth for what the relay can poll
-  without any new probe.
+- The relay consumes the documented `herdr agent list`, `herdr pane process-info`, `herdr pane
+  get`, `herdr pane read`, and `herdr agent explain --file` interfaces. Herdr's installed screen
+  manifest remains the source of classification rules.
 
 ## Product Principles
 
@@ -108,8 +107,7 @@ coding agents and multiple harnesses.
 
 ## Accessibility & Inclusion
 
-Confirmed priority for this revamp (explicit ask: "prioritize mobile accessibility"). Binding
-requirements carried into the surface brief: real pinch-zoom (no `user-scalable=no`),
-`prefers-reduced-motion` support (current blocked-card pulse animation has no escape), status
+The 1.0.0 surface supports real pinch-zoom (no `user-scalable=no`),
+`prefers-reduced-motion`, status
 conveyed by glyph + label in addition to color, 44×44px minimum touch targets, complete keyboard
 path, visible focus states, WCAG AA contrast across both themes.

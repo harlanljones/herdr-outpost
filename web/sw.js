@@ -1,9 +1,13 @@
 // herdr-outpost Service Worker — Hardened Cache & Offline Support
-const CACHE_NAME = 'herdr-outpost-v4';
+const CACHE_NAME = 'herdr-outpost-v5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './logo.svg',
+  './apple-touch-icon.png',
+  './icon-192.png',
+  './icon-512.png',
+  './badge-96.png',
   './manifest.json',
   './vendor/qrcode.js'
 ];
@@ -65,8 +69,8 @@ self.addEventListener('push', (event) => {
   let data = {
     title: 'herdr-outpost Notification',
     body: 'An agent status update was received.',
-    icon: 'logo.svg',
-    badge: 'logo.svg',
+    icon: 'icon-192.png',
+    badge: 'badge-96.png',
     tag: 'agent-status',
     data: {}
   };
@@ -82,8 +86,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: data.icon || 'logo.svg',
-    badge: data.badge || 'logo.svg',
+    icon: data.icon || 'icon-192.png',
+    badge: data.badge || 'badge-96.png',
     tag: data.tag || 'herdr-agent',
     data: data.data || {},
     vibrate: [200, 100, 200],

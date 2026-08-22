@@ -6,7 +6,7 @@ Welcome to `herdr-outpost`. This document defines operating rules, component bou
 
 ## Project Overview
 
-`herdr-outpost` is a lightweight, remote dashboard and relay gateway for [Herdr](https://herdr.dev) (the terminal workspace manager for AI coding agents). The reference deployment hosts it via Cloudflare Workers and Cloudflare Tunnel under custom domains (e.g. `herdr.example.com` and `relay.example.com`); other static hosts and process runners work natively too — see [Alternative Deployment Platforms](README.md#-alternative-deployment-platforms).
+`herdr-outpost` is a lightweight, remote dashboard and relay gateway for [Herdr](https://herdr.dev) (the terminal workspace manager for AI coding agents). The reference deployment hosts it via Cloudflare Workers and Cloudflare Tunnel under custom domains (e.g. `herdr.example.com` and `relay.example.com`); other static hosts and process runners work natively too — see [Alternative Deployment Platforms](README.md#alternative-deployment-platforms).
 
 ### Core Architecture
 

@@ -1,5 +1,5 @@
 name = "herdr-outpost"
-compatibility_date = "2024-01-01"
+compatibility_date = "2026-08-22"
 
 # Cloudflare Workers Static Assets: serves web/ directly with no build step
 # and no Worker script required. SPA fallback (not_found_handling) makes deep

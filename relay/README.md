@@ -1,8 +1,29 @@
 # herdr-outpost relay
 
-Async daemon relay and gateway for `herdr-outpost`.
+Async daemon relay and gateway for `herdr-outpost` 1.0.0. The tested baseline is Herdr 0.8.2 and Python 3.10+.
+
+## Run
+
+Install Herdr on every local or SSH host the relay will poll. The relay needs no custom Herdr plugin; official harness integrations are recommended because they improve lifecycle and native session identity:
+
+```bash
+herdr integration install claude   # or codex, opencode, pi, etc.
+herdr integration status
+herdr agent list
+```
+
+Copy [`../config/config.env.example`](../config/config.env.example) to `~/.config/herdr-outpost/config.env`, set a strong `HERDR_OUTPOST_RELAY_TOKEN`, and restrict `HERDR_OUTPOST_TRUSTED_ORIGINS` to the dashboard origins. Then start or install the service:
+
+```bash
+./start.sh
+# or
+./install-service.sh
+```
+
+See the main [README](../README.md) for features and alternative platforms, or the [Cloudflare deployment guide](../SCAFFOLD.md) for the reference setup.
 
 ## Features
+
 - WebSocket server for live bidirectional streaming with the `herdr-outpost` web dashboard.
 - **Session Lifecycle & Reconciliation**: Authoritative per-host polling reconciles active sessions against `herdr agent list` with a 2-miss grace period for clean teardown. Hook- and UDP-reported sessions expire after a configurable time-to-live (`HERDR_OUTPOST_SESSION_TTL`, default 90s). Emits `agent_removed` broadcasts on session termination.
 - **Liveness & Origin Metadata**: Every agent model carries observation provenance (`source`, e.g. `poll:local`, `hook`) and precise UTC timestamp (`last_seen_at`).
@@ -22,7 +43,7 @@ Async daemon relay and gateway for `herdr-outpost`.
 
 ### Agents incorrectly show as BLOCKED
 
-`herdr agent list` can report `blocked` for a pane whose lifecycle-hook session
+`herdr agent list` can report `blocked` for a pane whose lifecycle integration session
 registration was lost. The unreliable signature is a `blocked` entry with
 `screen_detection_skipped: true` and no `agent_session`: under Herdr's
 [status-authority model](https://herdr.dev/docs/agents/#status-authority), the
@@ -50,5 +71,5 @@ The relay keeps `agent_session_registered: false` even when the fallback
 corrects the displayed state, preserving that detection-health signal. If the
 fallback cannot classify the snapshot, the dashboard renders the retained block
 with an `? UNVERIFIED` badge. To restore lifecycle authority upstream, send a
-new prompt in that pane or restart the agent session so the harness plugin
-re-registers its session (`chat.message` re-attaches the root session id).
+new prompt in that pane or restart the agent so its official integration can
+register the native session again.

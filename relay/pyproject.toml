@@ -1,8 +1,9 @@
 [project]
 name = "herdr-outpost-relay"
-version = "0.1.0"
+version = "1.0.0"
 description = "Async daemon relay and gateway for herdr-outpost"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "websockets>=14.0",
@@ -10,6 +11,11 @@ dependencies = [
     "py-vapid>=1.9.0",
     "python-telegram-bot>=21.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/harlanljones/herdr-outpost"
+Documentation = "https://github.com/harlanljones/herdr-outpost#readme"
+Issues = "https://github.com/harlanljones/herdr-outpost/issues"
 
 [project.optional-dependencies]
 test = [

@@ -428,6 +428,7 @@ async def notify_telegram(title: str, text: str, pane_id: str = "") -> None:
 
 class HerdrRelayDaemon:
     PID_CACHE_TTL = 10.0
+    SERVER_CLOSE_TIMEOUT = 5.0
 
     def __init__(self):
         self.agents_state: Dict[str, Dict[str, Any]] = {}
@@ -1133,7 +1134,7 @@ class HerdrRelayDaemon:
             resp_data = {
                 "status": "ok",
                 "service": "herdr-outpost-relay",
-                "version": "0.1.0",
+                "version": "1.0.0",
                 "agents_count": len(self.agents_state),
                 "agents_by_host": agents_by_host,
                 "last_reconcile_at": self.last_reconcile_at,
@@ -1382,10 +1383,27 @@ class HerdrRelayDaemon:
         logger.info("Stopping herdr-outpost relay...")
         if self.front_server:
             self.front_server.close()
-            await self.front_server.wait_closed()
+            try:
+                await asyncio.wait_for(
+                    self.front_server.wait_closed(),
+                    timeout=self.SERVER_CLOSE_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Timed out waiting for front-end clients to close; forcing shutdown")
         if self.ws_server:
             self.ws_server.close()
-            await self.ws_server.wait_closed()
+            try:
+                await asyncio.wait_for(
+                    self.ws_server.wait_closed(),
+                    timeout=self.SERVER_CLOSE_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                # A long-lived client can remain inside the TCP front proxy
+                # while the internal WebSocket server is closing. Do not let
+                # that client hold a service restart until systemd's much
+                # longer stop timeout; asyncio.run() will cancel the remaining
+                # connection task as the process exits.
+                logger.warning("Timed out waiting for WebSocket clients to close; forcing shutdown")
         if self.udp_transport:
             self.udp_transport.close()
         logger.info("herdr-outpost relay stopped.")

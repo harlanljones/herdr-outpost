@@ -406,3 +406,29 @@ async def test_output_streaming_subscription():
     finally:
         await daemon.stop()
         CONFIG["output_interval"] = 3.0
+
+
+@pytest.mark.asyncio
+async def test_stop_bounds_websocket_client_shutdown():
+    """A stuck WebSocket client must not hold service restarts indefinitely."""
+
+    class HangingWebSocketServer:
+        def __init__(self):
+            self.close_called = False
+
+        def close(self):
+            self.close_called = True
+
+        async def wait_closed(self):
+            await asyncio.Event().wait()
+
+    daemon = HerdrRelayDaemon()
+    daemon.SERVER_CLOSE_TIMEOUT = 0.01
+    daemon.front_server = HangingWebSocketServer()
+    daemon.ws_server = HangingWebSocketServer()
+
+    await asyncio.wait_for(daemon.stop(), timeout=0.2)
+
+    assert daemon.running is False
+    assert daemon.front_server.close_called is True
+    assert daemon.ws_server.close_called is True

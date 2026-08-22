@@ -1,4 +1,4 @@
-# Design System: Annunciator Control Panel
+# Design System: Annunciator Control Panel (1.0.0)
 
 <!-- impeccable:design-schema 1 -->
 

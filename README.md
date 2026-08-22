@@ -1,41 +1,48 @@
 # herdr-outpost
 
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](tests/)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![Release](https://img.shields.io/badge/release-1.0.0-7c3aed.svg)](https://github.com/harlanljones/herdr-outpost/releases)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare)](https://workers.cloudflare.com)
-[![Cloudflare Tunnel](https://img.shields.io/badge/Cloudflare-Tunnel-F38020?logo=cloudflare)](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/)
+[![Cloudflare Tunnel](https://img.shields.io/badge/Cloudflare-Tunnel-F38020?logo=cloudflare)](https://developers.cloudflare.com/tunnel/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **herdr-outpost** is a lightweight, secure remote dashboard and relay gateway for [Herdr](https://herdr.dev) — the terminal workspace manager for AI coding agents. The reference deployment hosts the dashboard globally on **Cloudflare Workers** (static assets) and exposes local or multi-host agent relays securely via **Cloudflare Tunnel**. The dashboard is a zero-build static site and the relay is a standalone Python daemon, so both also run natively on several other platforms — see [Alternative Deployment Platforms](#-alternative-deployment-platforms).
+> **herdr-outpost** is a lightweight, secure remote dashboard and relay gateway for [Herdr](https://herdr.dev) — the terminal workspace manager for AI coding agents. The reference deployment hosts the dashboard globally on **Cloudflare Workers** (static assets) and exposes local or multi-host agent relays securely via **Cloudflare Tunnel**. The dashboard is a zero-build static site and the relay is a standalone Python daemon, so both also run natively on several other platforms — see [Alternative Deployment Platforms](#alternative-deployment-platforms).
+
+Version **1.0.0** is the first stable release. It is tested with Herdr 0.8.2 and uses Herdr's supported `agent` and `pane` CLI interfaces rather than duplicating agent-detection rules.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard-dark.png" alt="herdr-outpost Annunciator Fleet Dashboard" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/dashboard-light.png">
+    <img src="docs/screenshots/dashboard-dark.png" alt="herdr-outpost fleet dashboard showing agent status, repository groups, and telemetry" width="100%">
+  </picture>
 </p>
 
 ---
 
 ## Table of Contents
 
-- [Overview & Architecture](#-overview--architecture)
-- [Key Features](#-key-features)
-- [Prerequisites](#-prerequisites)
-- [Quick Start (5 Minutes)](#-quick-start-5-minutes)
-- [Step-by-Step Installation & Deployment](#-step-by-step-installation--deployment)
+- [Overview & Architecture](#overview--architecture)
+- [Key Features](#key-features)
+- [Prerequisites](#prerequisites)
+- [Herdr Integration](#herdr-integration)
+- [Quick Start (5 Minutes)](#quick-start-5-minutes)
+- [Step-by-Step Installation & Deployment](#step-by-step-installation--deployment)
   - [1. Clone Repository](#1-clone-repository)
   - [2. Configure Environment](#2-configure-environment)
   - [3. Configure Cloudflare Tunnel](#3-configure-cloudflare-tunnel)
   - [4. Deploy Frontend to Cloudflare Workers](#4-deploy-frontend-to-cloudflare-workers)
   - [5. Run Relay Daemon](#5-run-relay-daemon)
-- [Telegram Bot Setup](#-telegram-bot-setup)
-- [Web Push (VAPID) Setup](#-web-push-vapid-setup)
-- [Multi-Host & SSH Agent Monitoring](#-multi-host--ssh-agent-monitoring)
+- [Telegram Bot Setup](#telegram-bot-setup)
+- [Web Push (VAPID) Setup](#web-push-vapid-setup)
+- [Multi-Host & SSH Agent Monitoring](#multi-host--ssh-agent-monitoring)
 - [Live Agent Telemetry (harness, model, context, git)](#live-agent-telemetry-harness-model-context-git)
-- [Session Deep Links & Lifecycle](#-session-deep-links--lifecycle)
-- [Security & Hardening Best Practices](#-security--hardening-best-practices)
-- [Alternative Deployment Platforms](#-alternative-deployment-platforms)
-- [Automated Testing & QA](#-automated-testing--qa)
-- [Troubleshooting](#-troubleshooting)
-- [License & Contributing](#-license--contributing)
+- [Session Deep Links & Lifecycle](#session-deep-links--lifecycle)
+- [Security & Hardening Best Practices](#security--hardening-best-practices)
+- [Alternative Deployment Platforms](#alternative-deployment-platforms)
+- [Automated Testing & QA](#automated-testing--qa)
+- [Troubleshooting](#troubleshooting)
+- [License & Contributing](#license--contributing)
 
 ---
 
@@ -54,7 +61,7 @@
                ┌────────▼─────────┐          ┌────────▼─────────┐
                │Cloudflare Workers│          │ Cloudflare Tunnel│
                │ (Web Dashboard)  │          │   (cloudflared)  │
-               │  herdr.domain    │          │   relay.domain   │
+               │herdr.example.com │          │relay.example.com │
                └────────┬─────────┘          └────────┬─────────┘
                         │                             │
                         │ Static Assets               │ Secure Ingress
@@ -78,7 +85,7 @@
                            │                         │
             Local Agent IPC│             SSH / IPC   │
                            ▼                         ▼
-                 [Local Herdr Panes]       [Remote Server Panes]
+                 [Local Herdr Panes]       [Remote Herdr Panes]
 ```
 
 ---
@@ -93,7 +100,7 @@
 - **Interactive Control & Action Debouncing**: Prompt agents, send text, approve actions, reject actions, or interrupt running tasks from any browser with duplicate-click protection.
 
 <p align="center">
-  <img src="docs/screenshots/mobile-triage.png" alt="herdr-outpost Mobile Triage and Annunciator Strip" width="360">
+  <img src="docs/screenshots/mobile-triage.png" alt="Mobile alarm view for approving a blocked Herdr agent" width="360">
 </p>
 
 - **Production Hardening & Offline Resilience**:
@@ -116,12 +123,24 @@
 Before setting up `herdr-outpost`, ensure you have:
 
 1. **A Cloudflare Account & Domain** (e.g. `example.com`).
-2. **`herdr` CLI (0.7+)** installed on your workstation ([herdr.dev](https://herdr.dev)).
-3. **`uv`** (modern Python package and project manager) or Python 3.11+.
-4. **`cloudflared`** CLI ([Cloudflare Tunnel Download](https://developers.cloudflare.com/cloudflare-one/downloads/)).
+2. **Herdr 0.8.2+** installed on every machine the relay polls ([installation guide](https://herdr.dev/docs/install/)). Version 0.8.2 is the tested baseline for 1.0.0.
+3. **`uv`** (modern Python package and project manager) or Python 3.10+.
+4. **`cloudflared`** CLI ([Cloudflare Tunnel download](https://developers.cloudflare.com/tunnel/downloads/)).
 5. **Node.js & Wrangler** (optional, for deploying to Workers via CLI): `npm install -g wrangler`.
 
-> Deploying to Cloudflare is the reference path documented below, but nothing in `herdr-outpost` is Cloudflare-specific — see [Alternative Deployment Platforms](#-alternative-deployment-platforms) if you'd rather host the dashboard and relay elsewhere.
+> Deploying to Cloudflare is the reference path documented below, but nothing in `herdr-outpost` is Cloudflare-specific — see [Alternative Deployment Platforms](#alternative-deployment-platforms) if you'd rather host the dashboard and relay elsewhere.
+
+## Herdr Integration
+
+The relay polls `herdr agent list` and reads terminal output through Herdr's public CLI. No herdr-outpost-specific Herdr plugin is required. For the most reliable lifecycle state and resumable session identity, install Herdr's official integration for each agent harness you use, then verify it:
+
+```bash
+herdr integration install claude   # replace with codex, opencode, pi, etc.
+herdr integration status
+herdr agent list
+```
+
+Integration behavior varies by harness: some integrations author lifecycle state, while others provide session identity and leave state classification to Herdr's screen manifest. See Herdr's [agent status-authority model](https://herdr.dev/docs/agents/#status-authority) and [integration guide](https://herdr.dev/docs/integrations/) for the current support matrix.
 
 ---
 
@@ -133,16 +152,20 @@ git clone https://github.com/harlanljones/herdr-outpost
 cd herdr-outpost
 
 # 2. Copy and customize configuration
-cp config/config.env.example config.env
-# Edit config.env with your secure token and domain
+mkdir -p ~/.config/herdr-outpost
+cp config/config.env.example ~/.config/herdr-outpost/config.env
+# Edit ~/.config/herdr-outpost/config.env with your secure token and domain
 
 # 3. Create Cloudflare Tunnel
 cloudflared tunnel create herdr-outpost
 cloudflared tunnel route dns herdr-outpost relay.example.com
-cloudflared tunnel route dns herdr-outpost herdr.example.com
+mkdir -p ~/.cloudflared
+cp config/config-herdr-outpost.yml.example ~/.cloudflared/config-herdr-outpost.yml
+# Edit the copied file with your tunnel UUID and credentials path
 
 # 4. Deploy web dashboard to Cloudflare Workers
 cd web && wrangler deploy && cd ..
+# Add herdr.example.com under the Worker's Domains & Routes settings
 
 # 5. Start relay daemon
 cd relay && ./start.sh
@@ -153,7 +176,7 @@ Open `https://herdr.example.com` in your browser and enter your bearer token to 
 **Pairing a phone or second device:** once one browser is connected, open Settings there and scan the "Pair a Device" QR code with your phone's camera (or use Copy Link). This opens the dashboard already signed in — no need to type the token again. The QR/link embeds the same bearer token, so treat it like the token itself: display it in person rather than sending it over email or chat, and rotating `HERDR_OUTPOST_RELAY_TOKEN` (see Security below) invalidates it just like any other paired device.
 
 <p align="center">
-  <img src="docs/screenshots/device-pairing-qr.png" alt="herdr-outpost Device Pairing & Settings Modal" width="640">
+  <img src="docs/screenshots/device-pairing-qr.png" alt="Settings dialog with a demo QR code for pairing another device" width="640">
 </p>
 
 ---
@@ -187,9 +210,10 @@ Edit `~/.config/herdr-outpost/config.env`:
 HERDR_OUTPOST_RELAY_PORT=8375
 HERDR_OUTPOST_RELAY_HOST=127.0.0.1
 HERDR_OUTPOST_RELAY_TOKEN="your_generated_token_here"
-HERDR_OUTPOST_TRUSTED_ORIGINS="https://herdr.example.com,https://relay.example.com,http://localhost:8375"
+HERDR_OUTPOST_TRUSTED_ORIGINS="https://herdr.example.com,http://localhost:8375"
 HERDR_OUTPOST_TUNNEL_MODE=named
 HERDR_OUTPOST_TUNNEL_NAME=herdr-outpost
+HERDR_OUTPOST_TUNNEL_CONFIG="$HOME/.cloudflared/config-herdr-outpost.yml"
 ```
 
 ### 3. Configure Cloudflare Tunnel
@@ -203,9 +227,8 @@ HERDR_OUTPOST_TUNNEL_NAME=herdr-outpost
    cloudflared tunnel create herdr-outpost
    # Output returns your Tunnel UUID (e.g. 12345678-1234-1234-1234-123456789abc)
    ```
-3. Create DNS records:
+3. Create the relay DNS record. The dashboard domain is attached directly to the Worker in the next step, so do not route it through the tunnel:
    ```bash
-   cloudflared tunnel route dns herdr-outpost herdr.example.com
    cloudflared tunnel route dns herdr-outpost relay.example.com
    ```
 4. Copy and adapt the tunnel configuration template:
@@ -256,9 +279,8 @@ Receive real-time alerts on your mobile device when an agent requires approval o
 3. Message your bot or [@userinfobot](https://t.me/userinfobot) to get your numerical **Chat ID**.
 4. Add to `config.env`:
    ```bash
-   HERDR_OUTPOST_TELEGRAM_BOT_TOKEN="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ"
+   HERDR_OUTPOST_TELEGRAM_TOKEN="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ"
    HERDR_OUTPOST_TELEGRAM_CHAT_ID="987654321"
-   HERDR_OUTPOST_TELEGRAM_NOTIFY_EVENTS="blocked,done,error"
    ```
 5. Restart the relay daemon.
 
@@ -276,7 +298,7 @@ Enable native browser notifications across desktop and mobile:
    ```bash
    HERDR_OUTPOST_VAPID_PUBLIC_KEY="BK..."
    HERDR_OUTPOST_VAPID_PRIVATE_KEY=".."
-   HERDR_OUTPOST_VAPID_SUBJECT="mailto:admin@example.com"
+   HERDR_OUTPOST_VAPID_CLAIMS_EMAIL="mailto:admin@example.com"
    ```
 3. Open the dashboard and click **Enable Notifications** in the Settings panel.
 
@@ -302,11 +324,11 @@ Every agent card in the dashboard shows *who* is running it (harness + model), *
 (context window used, or a quota window for harnesses that don't expose per-session context).
 None of this requires setup — it's populated automatically by relay-side probes the moment
 `herdr agent list` reports an agent — but installing a small per-harness reporter sharpens
-identity from "best guess" to "exact," using `$HERDR_PANE_ID` (exported into every herdr pane's
+identity from "best guess" to "exact," using `$HERDR_PANE_ID` (exported into every Herdr pane's
 environment) for an unambiguous pane↔session mapping.
 
 <p align="center">
-  <img src="docs/screenshots/terminal-telemetry.png" alt="herdr-outpost Live ANSI Terminal and Agent Telemetry" width="100%">
+  <img src="docs/screenshots/terminal-telemetry.png" alt="Herdr agent terminal with telemetry, ANSI output, and approval controls" width="100%">
 </p>
 
 ### Zero-config (default)
@@ -357,7 +379,7 @@ must never break the harness it's reporting from.
 
 ---
 
-## 🔗 Session Deep Links & Lifecycle
+## Session Deep Links & Lifecycle
 
 ### Routes
 
@@ -392,9 +414,9 @@ Add to `config.env` alongside the other relay settings:
 HERDR_OUTPOST_SESSION_TTL=90
 ```
 
-### WebSocket Schema Additions
+### WebSocket Session Schema
 
-Every normalized agent object now carries liveness metadata:
+Every normalized agent object carries liveness metadata:
 
 ```json
 {
@@ -423,9 +445,9 @@ Pruned sessions broadcast an `agent_removed` message:
 
 `reason` is `"closed"` (missing from two consecutive polls) or `"expired"` (hook-only source past TTL).
 
-### Health Endpoint Additions
+### Health Endpoint
 
-`GET /health` now additionally reports:
+`GET /health` reports the relay version and session totals, including:
 
 - `agents_by_host` — current agent count keyed by host.
 - `last_reconcile_at` — ISO 8601 timestamp of the last successful reconciliation pass.
@@ -436,8 +458,7 @@ Pruned sessions broadcast an `agent_removed` message:
 
 - **Never Log Secrets**: The relay automatically scrubs tokens via `scrub()`. Never print unredacted credentials to stdout.
 - **Strict Origins**: Set `HERDR_OUTPOST_TRUSTED_ORIGINS` to only your trusted frontends to block Cross-Site WebSocket Hijacking.
-- **Cloudflare Zero Trust Access**:
-  - Protect `relay.example.com` with Cloudflare Access (Service Tokens or IP Whitelisting).
+- **Edge restrictions (optional)**: Add a Cloudflare WAF IP allowlist when every dashboard device has a stable source range. If you put Cloudflare Access in front of the relay, each browser must establish an Access session for the relay hostname before its WebSocket can connect.
 - **Constant-Time Verification**: All token authentication compares hashes using `hmac.compare_digest` to prevent timing attacks.
 
 ---
@@ -449,7 +470,7 @@ Pruned sessions broadcast an `agent_removed` message:
 - **`web/`** is a zero-build static site (HTML/CSS/JS, no bundler) — it runs on any static host.
 - **`relay/`** is a standalone Python asyncio daemon — it runs anywhere that keeps a long-lived process alive and can expose it to the internet over HTTPS/WSS.
 
-The Cloudflare Workers + Tunnel path above is the reference deployment because it needs no inbound firewall rule and no public IP, but the platforms below are natively supported without code changes — only the deploy command and the value of `RELAY_URL` / `HERDR_OUTPOST_TRUSTED_ORIGINS` change.
+The Cloudflare Workers + Tunnel path above is the reference deployment because it needs no inbound firewall rule and no public IP, but the platforms below work without application code changes — only the hosting setup, dashboard relay setting, and `HERDR_OUTPOST_TRUSTED_ORIGINS` change.
 
 ### Dashboard (`web/`) — static hosting
 
@@ -457,18 +478,18 @@ The Cloudflare Workers + Tunnel path above is the reference deployment because i
 |---|---|
 | **Vercel** | `vercel deploy web --prod` (or connect the repo and set the root directory to `web/`). |
 | **Netlify** | `netlify deploy --dir=web --prod`, or drag-and-drop the `web/` folder in the Netlify dashboard. |
-| **GitHub Pages** | Enable Pages on the repo, set the publishing source to the `web/` directory (or a `gh-pages` branch containing its contents). |
+| **GitHub Pages** | Publish the contents of `web/` from a `gh-pages` branch or a Pages Actions workflow. Add a `404.html` copy of `index.html` for deep links. |
 | **AWS S3 + CloudFront** | `aws s3 sync web/ s3://your-bucket --delete`, serve through a CloudFront distribution for TLS and caching. |
 | **Any static file server** | `nginx`, `Caddy`, or `python -m http.server` can all serve `web/` directly — there is nothing to build. |
 
-After deploying, point the dashboard at your relay by setting `RELAY_URL` in `web/index.html` (see [Step 6 of SCAFFOLD.md](SCAFFOLD.md)) or by passing `?relay=wss://your-relay-host` in the URL.
+After deploying, open **Settings** in the dashboard and save the relay WebSocket URL and bearer token. You can also bootstrap a device with `?relay=wss://your-relay-host&token=...`; the dashboard stores the values locally and removes the credentials from the visible URL. See [Step 6 of SCAFFOLD.md](SCAFFOLD.md#step-6-connect-the-dashboard).
 
 ### Relay (`relay/`) — long-running process + public HTTPS/WSS endpoint
 
 | Platform | Notes |
 |---|---|
 | **Fly.io** | `fly launch` from `relay/`, expose port `8375`; Fly terminates TLS and gives you a public `*.fly.dev` hostname with no tunnel needed. |
-| **Render** | Deploy `relay/` as a **Background Worker** or **Web Service** (native Python runtime); Render provides TLS and a public URL out of the box. |
+| **Render** | Deploy `relay/` as a **Web Service** so it receives a public TLS URL; a background worker alone cannot accept dashboard connections. |
 | **Railway** | Deploy `relay/` as a service from the repo; Railway auto-detects Python and assigns a public HTTPS domain. |
 | **A VPS (DigitalOcean, Hetzner, EC2, etc.)** | Run the relay with `./install-service.sh` (systemd) and put `Caddy` or `nginx` + Let's Encrypt in front for TLS termination instead of Cloudflare Tunnel. |
 | **Tailscale Funnel / Serve** | If your dashboard users are on your tailnet (or you want zero-config TLS without a Cloudflare account), `tailscale funnel 8375` exposes the relay directly. |
@@ -499,9 +520,10 @@ uv run --project relay --with pytest --with pytest-asyncio pytest tests/
 | Issue | Root Cause | Resolution |
 |---|---|---|
 | `403 Forbidden` on WebSocket | Origin or Bearer token mismatch | Verify `HERDR_OUTPOST_TRUSTED_ORIGINS` includes your domain and your token is passed in header or query parameter. |
-| Tunnel not connecting | Cloudflare credentials or config path issue | Run `cloudflared tunnel validate --config ~/.cloudflared/config-herdr-outpost.yml`. |
+| Tunnel not connecting | Cloudflare credentials or config path issue | Run `cloudflared tunnel --config ~/.cloudflared/config-herdr-outpost.yml ingress validate`. |
 | 404 on `herdr.example.com` | Workers deployment incomplete | Ensure `wrangler deploy` finished and the custom domain is active under **Domains & Routes**. |
-| Remote agents missing | SSH connectivity / path issue | Test `ssh user@host herdr pane list` manually from the relay host. |
+| Remote agents missing | SSH connectivity / `herdr` path issue | Test `ssh user@host herdr agent list` manually from the relay host. |
+| Agent incorrectly appears blocked | Herdr lifecycle authority was lost and screen detection was skipped | The relay automatically re-evaluates this exact signature with Herdr's active screen manifest. See [relay troubleshooting](relay/README.md#agents-incorrectly-show-as-blocked). |
 
 ---
 

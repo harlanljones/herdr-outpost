@@ -817,4 +817,58 @@ class TestMergeRefreshesLastSeenAt:
         merged = complete_agent_update_message(event)["agent"]
 
         assert merged["source"] == "udp:192.168.1.5"
+
+
+class TestDetectionHealth:
+    """agent_session_registered / blocked_confirmed detection-health fields."""
+
+    def test_polled_entry_with_session_reports_registered(self):
+        norm = normalize_agent_dict({
+            "host": "local", "workspace_id": "w13", "pane_id": "p1",
+            "agent_status": "blocked", "agent_session": {"value": "ses_1"},
+        })
+        assert norm["agent_session_registered"] is True
+
+    def test_polled_entry_without_session_reports_unregistered(self):
+        """herdr reports blocked with NO agent_session when lifecycle hook
+        registration was lost -- the false-positive signature."""
+        norm = normalize_agent_dict({
+            "host": "local", "workspace_id": "w13", "pane_id": "p1",
+            "agent_status": "blocked", "agent_session": None,
+        })
+        assert norm["agent_session_registered"] is False
+
+    def test_hook_event_without_session_key_is_unknown(self):
+        norm = normalize_agent_dict({"host": "local", "workspace": "w", "pane_id": "1", "status": "blocked"})
+        assert norm["agent_session_registered"] is None
+        assert norm["blocked_confirmed"] is False
+
+    def test_blocked_confirmed_passes_through(self):
+        norm = normalize_agent_dict({"host": "local", "workspace": "w", "pane_id": "1", "status": "blocked", "blocked_confirmed": True})
+        assert norm["blocked_confirmed"] is True
+
+    def test_merge_preserves_registration_when_hook_event_omits_it(self):
+        current_state = {
+            "local:w:p1": {
+                **make_current_agent("local:w:p1"),
+                "agent_session_registered": True,
+            }
+        }
+        hook_event = {"host": "local", "workspace": "w", "pane_id": "p1", "status": "working"}
+        merged = complete_agent_update_message(hook_event, current=current_state)["agent"]
+        assert merged["agent_session_registered"] is True
+
+    def test_merge_updates_registration_on_new_poll_evidence(self):
+        current_state = {
+            "local:w:p1": {
+                **make_current_agent("local:w:p1"),
+                "agent_session_registered": True,
+            }
+        }
+        poll_event = {
+            "host": "local", "workspace": "w", "pane_id": "p1",
+            "agent_status": "blocked", "agent_session": None,
+        }
+        merged = complete_agent_update_message(poll_event, current=current_state)["agent"]
+        assert merged["agent_session_registered"] is False
         assert datetime.datetime.fromisoformat(merged["last_seen_at"]).tzinfo is not None

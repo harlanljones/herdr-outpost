@@ -15,4 +15,25 @@ Async daemon relay and gateway for `herdr-outpost`.
 - **Central Secret Scrubbing**: Redacts bearer tokens and sensitive credentials across all logging, exceptions, and audit trails.
 - **Web Push Notifications (VAPID)**: Push alerts for blocked and completed agent tasks.
 - **Optional Telegram Bot Integration**: Alert pipeline and two-way status notifications via Telegram.
+- **Alarm Dampening & Detection Health**: Poll-sourced `blocked` reports must persist across `HERDR_OUTPOST_BLOCKED_CONFIRM_POLLS` consecutive polls (default 2) before Web Push/Telegram alarms fire; hook/UDP reporters alarm immediately. The relay also records whether herdr has a lifecycle session registered for each pane (`agent_session_registered`) so the dashboard can flag unverified block signals (see Troubleshooting).
 - **Multi-Host Polling**: Polling across local and remote (SSH) `herdr` workspaces and panes.
+
+## Troubleshooting
+
+### Agents incorrectly show as BLOCKED
+
+`herd agent list` (verified up through herdr 0.8.2) can report a persistent false
+`blocked` for a pane whose lifecycle-hook session registration was lost: those
+entries carry no `agent_session`, and under herdr's
+`full_lifecycle_hook_authority` model the pane then surfaces as `blocked` even
+while the agent is actively working. Confirm with:
+
+```bash
+herdr agent explain <pane_id>   # manifest: none / rule: none = no detection data
+herdr pane read <pane_id> --lines 40
+```
+
+The relay surfaces this as `agent_session_registered: false`; the dashboard
+renders an `? UNVERIFIED` badge on such blocks. To clear it upstream, send any
+new prompt in that pane or restart the agent session so the harness plugin
+re-registers its session (`chat.message` re-attaches the root session id).

@@ -103,6 +103,17 @@ def normalize_agent_dict(raw: Dict[str, Any], local_hostname: Optional[str] = No
     )
     status = normalize_status(raw_status)
 
+    # Detection health: whether herdr has a lifecycle session registered for
+    # this pane (`agent_session` in polled payloads). Absent on hook/UDP
+    # events -> None (unknown); never clobbers a previously observed value.
+    # Falls back to an already-derived field so apply_agent_message's
+    # re-normalization of merged agents preserves prior evidence.
+    if "agent_session" in raw:
+        session_registered: Optional[bool] = bool(raw.get("agent_session"))
+    else:
+        derived = raw.get("agent_session_registered")
+        session_registered = None if derived is None else bool(derived)
+
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     updated_at = raw.get("updated_at") or raw.get("timestamp") or raw.get("ts") or now_iso
 
@@ -115,6 +126,11 @@ def normalize_agent_dict(raw: Dict[str, Any], local_hostname: Optional[str] = No
         "tab": raw.get("tab") or raw.get("tab_name") or raw.get("tab_id") or "",
         "pane_id": str(pane_id),
         "status": status,
+        # Alarm dampening: set by the relay once a poll-sourced "blocked"
+        # report has persisted long enough to be trusted (see
+        # HerdrRelayDaemon.update_agent_status). False until confirmed.
+        "blocked_confirmed": bool(raw.get("blocked_confirmed")),
+        "agent_session_registered": session_registered,
         "status_reason": str(raw.get("status_reason") or raw.get("reason") or raw.get("message") or ""),
         # --- Liveness: how the relay last heard about this session, and when ---
         "source": str(raw.get("source") or ""),
@@ -186,6 +202,7 @@ def complete_agent_update_message(
             "harness": ("harness", "agent"),
             "task_title": ("task_title", "terminal_title_stripped", "terminal_title"),
             "status_reason": ("status_reason", "reason", "message"),
+            "agent_session_registered": ("agent_session",),
         }
         mergeable_extra = (
             "status_reason", "tool_call", "last_message", "last_output", "tab", "pid", "metadata",

@@ -110,6 +110,9 @@ CONFIG = {
     "output_interval": float(get_env("OUTPUT_INTERVAL", "2.0")),
     "output_lines": int(get_env("OUTPUT_LINES", "300")),
     "session_ttl": float(get_env("SESSION_TTL", "90")),
+    # Poll-sourced "blocked" reports must be seen on this many consecutive
+    # polls before push/Telegram alarms fire (upstream detection can flap).
+    "blocked_confirm_polls": int(get_env("BLOCKED_CONFIRM_POLLS", "2")),
     "vapid_private_key": get_env("VAPID_PRIVATE_KEY", ""),
     "vapid_public_key": get_env("VAPID_PUBLIC_KEY", ""),
     "vapid_claims_email": get_env("VAPID_CLAIMS_EMAIL", "mailto:admin@example.com"),
@@ -436,6 +439,10 @@ class HerdrRelayDaemon:
         self.output_cursors: Dict[str, str] = {}
         self.output_locks: Dict[str, asyncio.Lock] = {}
         self.miss_counts: Dict[str, Dict[str, int]] = {}
+        # Alarm dampening: consecutive poll observations of "blocked" per
+        # agent, and agents whose blocked alarm already fired this episode.
+        self._blocked_streak: Dict[str, int] = {}
+        self._blocked_notified: Set[str] = set()
         self.last_reconcile_at: Optional[str] = None
         self.lock = asyncio.Lock()
         self.internal_ws_port = CONFIG["port"] + 100
@@ -626,7 +633,14 @@ class HerdrRelayDaemon:
             p.setdefault(k, v)
 
     async def update_agent_status(self, raw_event: Dict[str, Any], source: str = "hook") -> Dict[str, Any]:
-        """Process an agent event, update state, trigger alerts if status changed, and broadcast."""
+        """Process an agent event, update state, trigger alerts if status changed, and broadcast.
+
+        Alarm dampening: a poll-sourced "blocked" must persist across
+        BLOCKED_CONFIRM_POLLS consecutive polls before the push/Telegram alarm
+        fires. The status itself is always broadcast immediately (the UI shows
+        raw state); only the alarm waits for confirmation. Hook/UDP reporters
+        carry authoritative lifecycle data and alarm immediately.
+        """
         async with self.lock:
             msg = complete_agent_update_message(raw_event, current=self.agents_state)
             msg["agent"]["source"] = msg["agent"].get("source") or source
@@ -635,30 +649,53 @@ class HerdrRelayDaemon:
             prev_status = self.agents_state.get(agent_id, {}).get("status", "unknown")
             new_status = agent.get("status", "unknown")
 
+            confirmed = False
+            notify_blocked = False
+            if new_status == "blocked":
+                confirm_polls = max(1, int(CONFIG["blocked_confirm_polls"]))
+                if source.startswith("poll") and confirm_polls > 1:
+                    self._blocked_streak[agent_id] = self._blocked_streak.get(agent_id, 0) + 1
+                    confirmed = self._blocked_streak[agent_id] >= confirm_polls
+                else:
+                    self._blocked_streak.pop(agent_id, None)
+                    confirmed = True
+                if confirmed:
+                    notify_blocked = agent_id not in self._blocked_notified
+                    self._blocked_notified.add(agent_id)
+            else:
+                self._blocked_streak.pop(agent_id, None)
+                self._blocked_notified.discard(agent_id)
+            agent["blocked_confirmed"] = confirmed
+
             apply_agent_message(self.agents_state, msg)
 
         # Broadcast to all live UI dashboard clients
         await self.broadcast_state(msg)
 
-        # Trigger notification if agent transitions to blocked or done
         if prev_status != new_status:
             logger.info(f"Agent state changed: {agent_id} -> {new_status} ({agent.get('status_reason', '')})")
             audit_log(
                 action="agent_state_transition",
                 pane_id=agent.get("pane_id", ""),
                 client=source,
-                details={"agent_id": agent_id, "prev": prev_status, "new": new_status, "reason": agent.get("status_reason", "")},
+                details={
+                    "agent_id": agent_id,
+                    "prev": prev_status,
+                    "new": new_status,
+                    "reason": agent.get("status_reason", ""),
+                    "confirmed": bool(agent.get("blocked_confirmed")),
+                },
             )
 
-            if new_status == "blocked":
-                title = f"Agent Blocked: {agent.get('agent_name', 'Agent')}"
-                body = agent.get("status_reason") or f"Agent in pane {agent.get('pane_id')} requires user action."
-                await push_manager.notify_all(title=title, body=body, pane_id=agent.get("pane_id", ""), status=new_status)
-                await notify_telegram(title=title, text=body, pane_id=agent.get("pane_id", ""))
-            elif new_status == "done":
-                title = f"Task Done: {agent.get('agent_name', 'Agent')}"
-                body = agent.get("last_message") or f"Agent in pane {agent.get('pane_id')} has completed its task."
-                await push_manager.notify_all(title=title, body=body, pane_id=agent.get("pane_id", ""), status=new_status)
+        if notify_blocked:
+            title = f"Agent Blocked: {agent.get('agent_name', 'Agent')}"
+            body = agent.get("status_reason") or f"Agent in pane {agent.get('pane_id')} requires user action."
+            await push_manager.notify_all(title=title, body=body, pane_id=agent.get("pane_id", ""), status=new_status)
+            await notify_telegram(title=title, text=body, pane_id=agent.get("pane_id", ""))
+        elif prev_status != new_status and new_status == "done":
+            title = f"Task Done: {agent.get('agent_name', 'Agent')}"
+            body = agent.get("last_message") or f"Agent in pane {agent.get('pane_id')} has completed its task."
+            await push_manager.notify_all(title=title, body=body, pane_id=agent.get("pane_id", ""), status=new_status)
 
         return msg
 
@@ -1139,6 +1176,11 @@ class HerdrRelayDaemon:
                                     # add/prune thrash against real herdr payloads
                                     # (composite pane_id + workspace_id-only entries).
                                     p["host"] = host
+                                    # Polls are authoritative on detection health:
+                                    # always state agent_session explicitly so an
+                                    # absent key means "no lifecycle session
+                                    # registered", not "unknown".
+                                    p["agent_session"] = p.get("agent_session")
                                     if host == "local":
                                         await self._enrich_local_agent(p)
                                     polled_ids.add(normalize_agent_dict(p)["id"])

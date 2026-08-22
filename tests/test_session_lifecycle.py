@@ -280,6 +280,68 @@ async def test_realistic_herdr_payloads_survive_repeated_polls(isolated_config):
 
 
 @pytest.mark.asyncio
+async def test_poll_marks_unregistered_sessions_and_dampens_blocked(isolated_config):
+    """Live herdr omits `agent_session` entirely for panes whose lifecycle hook
+    registration was lost (the false-blocked signature). The poll loop must
+    inject an explicit agent_session=None so polled state records detection
+    health, and a single poll-sourced blocked must stay alarm-unconfirmed."""
+    CONFIG["remotes"] = []
+    CONFIG["poll_interval"] = 0.05
+    CONFIG["session_ttl"] = 90.0
+
+    class MixedHarness(PollHarness):
+        async def __call__(self, args: list, host: str = "local"):
+            if args[:2] == ["agent", "list"]:
+                await self._permits.acquire()
+                self.cycles += 1
+                agents = [
+                    {
+                        "agent": "opencode",
+                        "agent_status": "blocked",
+                        "cwd": "/home/dev/clify",
+                        "foreground_cwd": "/home/dev/clify",
+                        "pane_id": "wA:p1",
+                        "tab_id": "wA:t1",
+                        "workspace_id": "wA",
+                        # note: NO agent_session key -- herdr's lost-registration shape
+                    },
+                    {
+                        "agent": "opencode",
+                        "agent_status": "working",
+                        "cwd": "/home/dev/other",
+                        "foreground_cwd": "/home/dev/other",
+                        "pane_id": "wB:p1",
+                        "tab_id": "wB:t1",
+                        "workspace_id": "wB",
+                        "agent_session": {"agent": "opencode", "value": "ses_1"},
+                    },
+                ]
+                return 0, json.dumps({"result": {"agents": agents}, "type": "agent_list"}), ""
+            return 0, "[]", ""
+
+    capture = BroadcastCapture()
+    daemon = make_daemon_with(MixedHarness(), capture)
+
+    daemon.running = True
+    poll_task = asyncio.create_task(daemon.poll_herdr_agents())
+    try:
+        daemon.execute_herdr_cmd.release_cycle()
+        await wait_for_cycles(daemon.execute_herdr_cmd, 1)
+        await asyncio.sleep(0.05)
+
+        unregistered = daemon.agents_state["local:default:wA:p1"]
+        healthy = daemon.agents_state["local:default:wB:p1"]
+        assert unregistered["status"] == "blocked"
+        assert unregistered["blocked_confirmed"] is False  # dampened on first poll
+        assert unregistered["agent_session_registered"] is False
+        assert healthy["status"] == "working"
+        assert healthy["agent_session_registered"] is True
+    finally:
+        stop_poll_task(daemon, poll_task)
+        await reap(poll_task)
+
+
+@pytest.mark.asyncio
 async def test_failed_polls_skip_reconciliation(isolated_config):
     """With `herdr agent list` failing (nonzero exit), reconciliation is skipped
     entirely: agents survive repeated failed cycles and nothing is removed."""

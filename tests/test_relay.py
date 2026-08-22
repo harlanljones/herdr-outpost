@@ -12,6 +12,7 @@ from websockets.asyncio.client import connect as ws_connect
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "relay")))
 
 import agent_state
+import herdr_relay
 from herdr_relay import HerdrRelayDaemon, scrub, scrub_dict, validate_origin, CONFIG
 
 
@@ -127,6 +128,70 @@ def test_origin_verification():
     assert validate_origin("https://herdr.example.com", trusted) is True
     assert validate_origin("https://sub.example.com", trusted) is True
     assert validate_origin("https://malicious-site.com", trusted) is False
+
+
+@pytest.mark.asyncio
+async def test_blocked_alarm_dampening(monkeypatch):
+    """Poll-sourced blocked reports must persist for BLOCKED_CONFIRM_POLLS
+    consecutive polls before the alarm fires; hook reports alarm immediately."""
+    original_polls = CONFIG["blocked_confirm_polls"]
+    original_push = herdr_relay.push_manager
+    original_telegram = herdr_relay.notify_telegram
+
+    fired = []
+
+    class FakePushManager:
+        async def notify_all(self, **kwargs):
+            fired.append(kwargs)
+
+    async def fake_telegram(**kwargs):
+        fired.append(kwargs)
+
+    monkeypatch.setattr(herdr_relay, "push_manager", FakePushManager())
+    monkeypatch.setattr(herdr_relay, "notify_telegram", fake_telegram)
+    CONFIG["blocked_confirm_polls"] = 3
+
+    daemon = HerdrRelayDaemon()
+    pane = {"host": "local", "workspace": "default", "pane_id": "77"}
+
+    try:
+        # Polls 1 and 2: status flips to blocked but stays below threshold.
+        msg1 = await daemon.update_agent_status({**pane, "agent_status": "blocked"}, source="poll:test")
+        assert msg1["agent"]["status"] == "blocked"
+        assert msg1["agent"]["blocked_confirmed"] is False
+        msg2 = await daemon.update_agent_status({**pane, "agent_status": "blocked"}, source="poll:test")
+        assert msg2["agent"]["blocked_confirmed"] is False
+        assert fired == []
+        assert daemon.agents_state["local:default:77"]["blocked_confirmed"] is False
+
+        # Poll 3 crosses the threshold -> alarm fires exactly once...
+        msg3 = await daemon.update_agent_status({**pane, "agent_status": "blocked"}, source="poll:test")
+        assert msg3["agent"]["blocked_confirmed"] is True
+        assert len(fired) == 2  # push + telegram
+        assert all(f["title"].startswith("Agent Blocked") for f in fired)
+
+        # ...and does not refire while blocked persists.
+        await daemon.update_agent_status({**pane, "agent_status": "blocked"}, source="poll:test")
+        assert len(fired) == 2
+
+        # Leaving blocked resets the episode.
+        await daemon.update_agent_status({**pane, "agent_status": "working"}, source="poll:test")
+        assert len(fired) == 2
+        assert daemon.agents_state["local:default:77"]["blocked_confirmed"] is False
+
+        # Hook/UDP reporters are authoritative and alarm immediately.
+        await daemon.update_agent_status({**pane, "agent_status": "blocked"}, source="hook")
+        assert len(fired) == 4
+
+        # A fresh poll episode starts confirming from zero again.
+        await daemon.update_agent_status({**pane, "agent_status": "working"}, source="poll:test")
+        await daemon.update_agent_status({**pane, "agent_status": "blocked"}, source="poll:test")
+        assert daemon.agents_state["local:default:77"]["blocked_confirmed"] is False
+        assert len(fired) == 4
+    finally:
+        CONFIG["blocked_confirm_polls"] = original_polls
+        herdr_relay.push_manager = original_push
+        herdr_relay.notify_telegram = original_telegram
 
 
 @pytest.mark.asyncio

@@ -279,66 +279,187 @@ async def test_realistic_herdr_payloads_survive_repeated_polls(isolated_config):
         await reap(poll_task)
 
 
+class ScreenFallbackHarness(PollHarness):
+    """Serve one realistic pane plus pane-read/screen-explain responses."""
+
+    def __init__(
+        self,
+        *,
+        pane_overrides: dict | None = None,
+        read_result: tuple[int, str, str] = (0, "agent is still working", ""),
+        explain_result: tuple[int, str, str] = (
+            0,
+            json.dumps({
+                "agent": "opencode",
+                "manifest_source": "remote:opencode.toml",
+                "state": "working",
+            }),
+            "",
+        ),
+    ):
+        super().__init__()
+        self.pane_overrides = pane_overrides or {}
+        self.read_result = read_result
+        self.explain_result = explain_result
+        self.calls: list[tuple[list, str, dict]] = []
+
+    async def __call__(self, args: list, host: str = "local", **kwargs):
+        self.calls.append((args, host, kwargs))
+        if args[:2] == ["agent", "list"]:
+            await self._permits.acquire()
+            self.cycles += 1
+            pane = {
+                "agent": "opencode",
+                "agent_status": "blocked",
+                "screen_detection_skipped": True,
+                "cwd": "/home/dev/clify",
+                "foreground_cwd": "/home/dev/clify",
+                "pane_id": "wA:p1",
+                "tab_id": "wA:t1",
+                "workspace_id": "wA",
+                # No agent_session: this completes the unreliable poll signature.
+                **self.pane_overrides,
+            }
+            return 0, json.dumps({"result": {"agents": [pane]}, "type": "agent_list"}), ""
+        if args[:2] == ["pane", "read"]:
+            return self.read_result
+        if args[:2] == ["agent", "explain"]:
+            return self.explain_result
+        return 0, "[]", ""
+
+    def calls_for(self, prefix: list[str]) -> list[tuple[list, str, dict]]:
+        return [call for call in self.calls if call[0][:len(prefix)] == prefix]
+
+
+async def run_one_fallback_poll(harness: ScreenFallbackHarness) -> HerdrRelayDaemon:
+    capture = BroadcastCapture()
+    daemon = make_daemon_with(harness, capture)
+    daemon.running = True
+    poll_task = asyncio.create_task(daemon.poll_herdr_agents())
+    try:
+        harness.release_cycle()
+        await wait_for_cycles(harness, 1)
+        await wait_until(lambda: "local:default:wA:p1" in daemon.agents_state)
+        return daemon
+    finally:
+        stop_poll_task(daemon, poll_task)
+        await reap(poll_task)
+
+
 @pytest.mark.asyncio
-async def test_poll_marks_unregistered_sessions_and_dampens_blocked(isolated_config):
-    """Live herdr omits `agent_session` entirely for panes whose lifecycle hook
-    registration was lost (the false-blocked signature). The poll loop must
-    inject an explicit agent_session=None so polled state records detection
-    health, and a single poll-sourced blocked must stay alarm-unconfirmed."""
+@pytest.mark.parametrize("manifest_state", ["working", "idle"])
+async def test_false_block_screen_fallback_clears_false_block(isolated_config, manifest_state):
+    """The exact unreliable signature is reclassified by the agent manifest.
+
+    Detection health must still report the missing lifecycle registration, while
+    the corrected working state never enters blocked confirmation.
+    """
     CONFIG["remotes"] = []
     CONFIG["poll_interval"] = 0.05
     CONFIG["session_ttl"] = 90.0
 
-    class MixedHarness(PollHarness):
-        async def __call__(self, args: list, host: str = "local"):
-            if args[:2] == ["agent", "list"]:
-                await self._permits.acquire()
-                self.cycles += 1
-                agents = [
-                    {
-                        "agent": "opencode",
-                        "agent_status": "blocked",
-                        "cwd": "/home/dev/clify",
-                        "foreground_cwd": "/home/dev/clify",
-                        "pane_id": "wA:p1",
-                        "tab_id": "wA:t1",
-                        "workspace_id": "wA",
-                        # note: NO agent_session key -- herdr's lost-registration shape
-                    },
-                    {
-                        "agent": "opencode",
-                        "agent_status": "working",
-                        "cwd": "/home/dev/other",
-                        "foreground_cwd": "/home/dev/other",
-                        "pane_id": "wB:p1",
-                        "tab_id": "wB:t1",
-                        "workspace_id": "wB",
-                        "agent_session": {"agent": "opencode", "value": "ses_1"},
-                    },
-                ]
-                return 0, json.dumps({"result": {"agents": agents}, "type": "agent_list"}), ""
-            return 0, "[]", ""
+    harness = ScreenFallbackHarness(
+        explain_result=(0, json.dumps({
+            "agent": "opencode",
+            "manifest_source": "remote:opencode.toml",
+            "state": manifest_state,
+        }), ""),
+    )
+    daemon = await run_one_fallback_poll(harness)
 
-    capture = BroadcastCapture()
-    daemon = make_daemon_with(MixedHarness(), capture)
+    agent = daemon.agents_state["local:default:wA:p1"]
+    assert agent["status"] == manifest_state
+    assert agent["blocked_confirmed"] is False
+    assert agent["agent_session_registered"] is False
+    assert "local:default:wA:p1" not in daemon._blocked_streak
+    assert "local:default:wA:p1" not in daemon._blocked_notified
 
-    daemon.running = True
-    poll_task = asyncio.create_task(daemon.poll_herdr_agents())
-    try:
-        daemon.execute_herdr_cmd.release_cycle()
-        await wait_for_cycles(daemon.execute_herdr_cmd, 1)
-        await asyncio.sleep(0.05)
+    assert len(harness.calls_for(["pane", "read"])) == 1
+    explain_calls = harness.calls_for(["agent", "explain"])
+    assert len(explain_calls) == 1
+    assert "opencode" in explain_calls[0][0]
+    # The pane snapshot is supplied on stdin rather than exposed in argv.
+    assert "agent is still working" not in explain_calls[0][0]
+    assert "agent is still working" in explain_calls[0][2].values()
 
-        unregistered = daemon.agents_state["local:default:wA:p1"]
-        healthy = daemon.agents_state["local:default:wB:p1"]
-        assert unregistered["status"] == "blocked"
-        assert unregistered["blocked_confirmed"] is False  # dampened on first poll
-        assert unregistered["agent_session_registered"] is False
-        assert healthy["status"] == "working"
-        assert healthy["agent_session_registered"] is True
-    finally:
-        stop_poll_task(daemon, poll_task)
-        await reap(poll_task)
+
+@pytest.mark.asyncio
+async def test_screen_fallback_preserves_manifest_confirmed_block(isolated_config):
+    CONFIG["remotes"] = []
+    CONFIG["poll_interval"] = 0.05
+    CONFIG["session_ttl"] = 90.0
+    harness = ScreenFallbackHarness(
+        read_result=(0, "Allow this command? [y/N]", ""),
+        explain_result=(0, json.dumps({
+            "agent": "opencode",
+            "manifest_source": "remote:opencode.toml",
+            "matched_rule": {"id": "permission_required", "state": "blocked"},
+            "state": "blocked",
+        }), ""),
+    )
+
+    daemon = await run_one_fallback_poll(harness)
+
+    agent = daemon.agents_state["local:default:wA:p1"]
+    assert agent["status"] == "blocked"
+    assert agent["blocked_confirmed"] is False
+    assert daemon._blocked_streak["local:default:wA:p1"] == 1
+    assert agent["agent_session_registered"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "pane_overrides",
+    [
+        pytest.param(
+            {"agent_session": {"agent": "opencode", "value": "ses_1"}},
+            id="registered-session",
+        ),
+        pytest.param({"screen_detection_skipped": False}, id="screen-detection-ran"),
+    ],
+)
+async def test_screen_fallback_bypasses_reliable_poll_shapes(isolated_config, pane_overrides):
+    CONFIG["remotes"] = []
+    CONFIG["poll_interval"] = 0.05
+    CONFIG["session_ttl"] = 90.0
+    harness = ScreenFallbackHarness(pane_overrides=pane_overrides)
+
+    daemon = await run_one_fallback_poll(harness)
+
+    assert daemon.agents_state["local:default:wA:p1"]["status"] == "blocked"
+    assert harness.calls_for(["pane", "read"]) == []
+    assert harness.calls_for(["agent", "explain"]) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("read_result", "explain_result"),
+    [
+        pytest.param((1, "", "read failed"), (0, "unused", ""), id="read-failure"),
+        pytest.param((0, "screen", ""), (1, "", "explain failed"), id="explain-failure"),
+        pytest.param((0, "screen", ""), (0, "{malformed", ""), id="malformed-json"),
+        pytest.param(
+            (0, "screen", ""),
+            (0, json.dumps({"agent": "opencode", "manifest_source": None, "state": "working"}), ""),
+            id="missing-manifest",
+        ),
+    ],
+)
+async def test_screen_fallback_failures_preserve_upstream_block(
+    isolated_config, read_result, explain_result
+):
+    CONFIG["remotes"] = []
+    CONFIG["poll_interval"] = 0.05
+    CONFIG["session_ttl"] = 90.0
+    harness = ScreenFallbackHarness(read_result=read_result, explain_result=explain_result)
+
+    daemon = await run_one_fallback_poll(harness)
+
+    agent = daemon.agents_state["local:default:wA:p1"]
+    assert agent["status"] == "blocked"
+    assert agent["blocked_confirmed"] is False
+    assert daemon._blocked_streak["local:default:wA:p1"] == 1
+    assert agent["agent_session_registered"] is False
 
 
 @pytest.mark.asyncio

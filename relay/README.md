@@ -15,25 +15,40 @@ Async daemon relay and gateway for `herdr-outpost`.
 - **Central Secret Scrubbing**: Redacts bearer tokens and sensitive credentials across all logging, exceptions, and audit trails.
 - **Web Push Notifications (VAPID)**: Push alerts for blocked and completed agent tasks.
 - **Optional Telegram Bot Integration**: Alert pipeline and two-way status notifications via Telegram.
-- **Alarm Dampening & Detection Health**: Poll-sourced `blocked` reports must persist across `HERDR_OUTPOST_BLOCKED_CONFIRM_POLLS` consecutive polls (default 2) before Web Push/Telegram alarms fire; hook/UDP reporters alarm immediately. The relay also records whether herdr has a lifecycle session registered for each pane (`agent_session_registered`) so the dashboard can flag unverified block signals (see Troubleshooting).
+- **Alarm Dampening & Detection Health**: Poll-sourced `blocked` reports must persist across `HERDR_OUTPOST_BLOCKED_CONFIRM_POLLS` consecutive polls (default 2) before Web Push/Telegram alarms fire; hook/UDP reporters alarm immediately. When Herdr skips screen detection for an unregistered lifecycle session, the relay automatically re-evaluates recent pane output with Herdr's active screen manifest before confirming the block. The relay still records whether Herdr has a lifecycle session registered for each pane (`agent_session_registered`) so the dashboard can flag detection-health issues (see Troubleshooting).
 - **Multi-Host Polling**: Polling across local and remote (SSH) `herdr` workspaces and panes.
 
 ## Troubleshooting
 
 ### Agents incorrectly show as BLOCKED
 
-`herd agent list` (verified up through herdr 0.8.2) can report a persistent false
-`blocked` for a pane whose lifecycle-hook session registration was lost: those
-entries carry no `agent_session`, and under herdr's
-`full_lifecycle_hook_authority` model the pane then surfaces as `blocked` even
-while the agent is actively working. Confirm with:
+`herdr agent list` can report `blocked` for a pane whose lifecycle-hook session
+registration was lost. The unreliable signature is a `blocked` entry with
+`screen_detection_skipped: true` and no `agent_session`: under Herdr's
+[status-authority model](https://herdr.dev/docs/agents/#status-authority), the
+lifecycle integration was authoritative, so Herdr did not also evaluate its
+screen manifest.
+
+The relay handles this signature automatically. It reads the pane's recent
+plain-text detection snapshot and evaluates it with the detected agent's active
+manifest using `herdr agent explain --file`. A manifest result of `working` or
+`idle` clears the false block before status normalization, while `blocked`
+preserves a genuine approval or permission prompt. Read or explain failures,
+malformed output, and missing manifests fail safely by retaining the original
+unverified block. Registered lifecycle sessions, non-skipped screen detection,
+and hook/UDP events do not use this fallback.
+
+To reproduce the screen evaluation manually, save a plain-text snapshot and use
+Herdr's [file-based explain interface](https://herdr.dev/docs/cli-reference/#agents):
 
 ```bash
-herdr agent explain <pane_id>   # manifest: none / rule: none = no detection data
-herdr pane read <pane_id> --lines 40
+herdr pane read <pane_id> --source detection --format text > screen.txt
+herdr agent explain --file screen.txt --agent <agent> --json
 ```
 
-The relay surfaces this as `agent_session_registered: false`; the dashboard
-renders an `? UNVERIFIED` badge on such blocks. To clear it upstream, send any
+The relay keeps `agent_session_registered: false` even when the fallback
+corrects the displayed state, preserving that detection-health signal. If the
+fallback cannot classify the snapshot, the dashboard renders the retained block
+with an `? UNVERIFIED` badge. To restore lifecycle authority upstream, send a
 new prompt in that pane or restart the agent session so the harness plugin
 re-registers its session (`chat.message` re-attaches the root session id).

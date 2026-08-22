@@ -21,6 +21,7 @@ import re
 import signal
 import socket
 import sys
+import tempfile
 import urllib.parse
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
@@ -717,21 +718,51 @@ class HerdrRelayDaemon:
     }
 
 
-    async def execute_herdr_cmd(self, args: List[str], host: str = "local") -> Tuple[int, str, str]:
-        """Execute a herdr CLI command locally or over SSH."""
+    async def execute_herdr_cmd(
+        self,
+        args: List[str],
+        host: str = "local",
+        stdin: Optional[str] = None,
+    ) -> Tuple[int, str, str]:
+        """Execute a herdr CLI command locally or over SSH.
+
+        POSIX commands (including commands reached over SSH) receive ``stdin``
+        directly. Local Windows commands that refer to ``/dev/stdin`` instead
+        receive a private temporary file because that device is unavailable.
+        """
+        command_args = list(args)
+        stdin_bytes = stdin.encode("utf-8") if stdin is not None else None
+        temp_path: Optional[str] = None
+
+        if stdin is not None and (not host or host == "local") and platform.system() == "Windows":
+            try:
+                fd, temp_path = tempfile.mkstemp(prefix="herdr-outpost-screen-", suffix=".txt")
+                with os.fdopen(fd, "wb") as temp_file:
+                    temp_file.write(stdin_bytes)
+                command_args = [temp_path if arg == "/dev/stdin" else arg for arg in command_args]
+                stdin_bytes = None
+            except Exception as err:
+                if temp_path:
+                    try:
+                        os.unlink(temp_path)
+                    except OSError:
+                        pass
+                return 1, "", str(err)
+
         if not host or host == "local":
-            cmd = ["herdr"] + args
+            cmd = ["herdr"] + command_args
         else:
-            cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", host, "herdr"] + args
+            cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", host, "herdr"] + command_args
 
         try:
             proc = await asyncio.create_subprocess_exec(
                 cmd[0],
                 *cmd[1:],
+                stdin=asyncio.subprocess.PIPE if stdin_bytes is not None else None,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15.0)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(input=stdin_bytes), timeout=15.0)
             return proc.returncode or 0, stdout.decode("utf-8", errors="replace"), stderr.decode("utf-8", errors="replace")
         except FileNotFoundError:
             return 127, "", "herdr binary not found in PATH"
@@ -739,6 +770,56 @@ class HerdrRelayDaemon:
             return 124, "", "Command execution timed out after 15s"
         except Exception as err:
             return 1, "", str(err)
+        finally:
+            if temp_path:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+
+    async def _screen_fallback_status(self, agent: Dict[str, Any], host: str) -> Optional[str]:
+        """Re-evaluate an unreliable blocked poll using Herdr's screen manifest."""
+        pane_id = str(agent.get("pane_id") or agent.get("pane") or "")
+        detected_agent = agent.get("agent")
+        if not pane_id or not isinstance(detected_agent, str) or not detected_agent.strip():
+            return None
+
+        read_code, screen, _ = await self.execute_herdr_cmd(
+            ["pane", "read", pane_id, "--source", "detection", "--format", "text"],
+            host=host,
+        )
+        if read_code != 0:
+            return None
+
+        explain_code, explained, _ = await self.execute_herdr_cmd(
+            [
+                "agent",
+                "explain",
+                "--agent",
+                detected_agent,
+                "--file",
+                "/dev/stdin",
+                "--format",
+                "json",
+            ],
+            host=host,
+            stdin=screen,
+        )
+        if explain_code != 0 or not explained.strip():
+            return None
+
+        try:
+            result = json.loads(explained)
+        except (json.JSONDecodeError, TypeError):
+            return None
+        if not isinstance(result, dict):
+            return None
+        if isinstance(result.get("result"), dict):
+            result = result["result"]
+
+        state = result.get("state")
+        manifest_source = result.get("manifest_source")
+        return state if manifest_source and state in {"working", "idle", "blocked"} else None
 
     async def handle_client_action(self, action: str, params: Dict[str, Any], client_ip: str = "") -> Dict[str, Any]:
         """Process actions requested by web clients or Telegram (prompt, approve, reject, read, etc.)."""
@@ -1211,6 +1292,17 @@ class HerdrRelayDaemon:
                                     # absent key means "no lifecycle session
                                     # registered", not "unknown".
                                     p["agent_session"] = p.get("agent_session")
+                                    unreliable_block = (
+                                        normalize_agent_dict(p)["status"] == "blocked"
+                                        and p.get("screen_detection_skipped") is True
+                                        and not p.get("agent_session")
+                                    )
+                                    if unreliable_block:
+                                        fallback_status = await self._screen_fallback_status(p, host)
+                                        if fallback_status is not None:
+                                            # `status` has precedence over Herdr's
+                                            # `agent_status` during normalization.
+                                            p["status"] = fallback_status
                                     if host == "local":
                                         await self._enrich_local_agent(p)
                                     polled_ids.add(normalize_agent_dict(p)["id"])

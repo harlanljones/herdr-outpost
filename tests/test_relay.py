@@ -131,6 +131,86 @@ def test_origin_verification():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("host", "expected_prefix"),
+    [
+        pytest.param("local", ["herdr"], id="local-posix"),
+        pytest.param(
+            "buildbox",
+            ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "buildbox", "herdr"],
+            id="ssh-remote",
+        ),
+    ],
+)
+async def test_execute_herdr_cmd_passes_screen_on_stdin(monkeypatch, host, expected_prefix):
+    captured = {}
+
+    class FakeProcess:
+        returncode = 0
+
+        async def communicate(self, input=None):
+            captured["input"] = input
+            return b'{"state":"working"}', b""
+
+    async def fake_subprocess_exec(*cmd, **kwargs):
+        captured["cmd"] = list(cmd)
+        captured["kwargs"] = kwargs
+        return FakeProcess()
+
+    monkeypatch.setattr(herdr_relay.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess_exec)
+    daemon = HerdrRelayDaemon()
+
+    code, stdout, stderr = await daemon.execute_herdr_cmd(
+        ["agent", "explain", "--file", "/dev/stdin", "--agent", "opencode", "--json"],
+        host=host,
+        stdin="terminal snapshot",
+    )
+
+    assert (code, stdout, stderr) == (0, '{"state":"working"}', "")
+    assert captured["cmd"][:len(expected_prefix)] == expected_prefix
+    assert "/dev/stdin" in captured["cmd"]
+    assert captured["kwargs"]["stdin"] is asyncio.subprocess.PIPE
+    assert captured["input"] == b"terminal snapshot"
+
+
+@pytest.mark.asyncio
+async def test_execute_herdr_cmd_windows_uses_private_temporary_file(monkeypatch):
+    captured = {}
+
+    class FakeProcess:
+        returncode = 0
+
+        async def communicate(self, input=None):
+            captured["input"] = input
+            return b'{"state":"idle"}', b""
+
+    async def fake_subprocess_exec(*cmd, **kwargs):
+        captured["cmd"] = list(cmd)
+        captured["kwargs"] = kwargs
+        temp_path = captured["cmd"][captured["cmd"].index("--file") + 1]
+        captured["temp_path"] = temp_path
+        with open(temp_path, "rb") as temp_file:
+            captured["contents"] = temp_file.read()
+        return FakeProcess()
+
+    monkeypatch.setattr(herdr_relay.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_subprocess_exec)
+    daemon = HerdrRelayDaemon()
+
+    code, stdout, stderr = await daemon.execute_herdr_cmd(
+        ["agent", "explain", "--file", "/dev/stdin", "--agent", "opencode", "--json"],
+        stdin="private snapshot",
+    )
+
+    assert (code, stdout, stderr) == (0, '{"state":"idle"}', "")
+    assert captured["contents"] == b"private snapshot"
+    assert captured["input"] is None
+    assert captured["kwargs"]["stdin"] is None
+    assert not os.path.exists(captured["temp_path"])
+
+
+@pytest.mark.asyncio
 async def test_blocked_alarm_dampening(monkeypatch):
     """Poll-sourced blocked reports must persist for BLOCKED_CONFIRM_POLLS
     consecutive polls before the alarm fires; hook reports alarm immediately."""

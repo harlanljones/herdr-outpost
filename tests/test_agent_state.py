@@ -24,6 +24,7 @@ from agent_state import (
     complete_agent_update_message,
     find_expired_agents,
     get_default_hostname,
+    infer_block_kind,
     normalize_agent_dict,
     normalize_status,
     parse_agent_id,
@@ -94,6 +95,79 @@ class TestStatusNormalization:
     )
     def test_normalize_status(self, raw, expected):
         assert normalize_status(raw) == expected
+
+
+class TestBlockKindInference:
+    """Classify blocked episodes as permission prompts vs TUI questions."""
+
+    @pytest.mark.parametrize(
+        "reason,message,screen,expected",
+        [
+            ("Needs approval to run bash", "", "", "permission"),
+            ("Permission required to edit file", "", "", "permission"),
+            ("Allow this tool call?", "", "", "permission"),
+            ("Do you want to proceed?", "y/n", "", "permission"),
+            ("Waiting for user confirmation", "", "", "permission"),
+            ("AskUserQuestion", "", "", "question"),
+            ("Waiting for user input", "Choose an option", "", "question"),
+            ("", "Select one of the following", "", "question"),
+            ("prompting", "Which approach should I take?", "", "question"),
+            ("", "", "❯ 1. Refactor module\n  2. Keep as-is", "question"),
+            ("", "", "Use arrow keys to navigate", "question"),
+            ("", "", "", "permission"),  # ambiguous → permission
+            ("blocked", "", "some unrelated output", "permission"),
+        ],
+    )
+    def test_infer_block_kind(self, reason, message, screen, expected):
+        assert infer_block_kind(reason, message, screen) == expected
+
+    def test_normalize_sets_block_kind_when_blocked(self):
+        agent = normalize_agent_dict(
+            {
+                "host": "local",
+                "workspace": "default",
+                "pane_id": "1",
+                "status": "blocked",
+                "status_reason": "AskUserQuestion: pick a plan",
+            }
+        )
+        assert agent["block_kind"] == "question"
+
+    def test_normalize_permission_block_kind(self):
+        agent = normalize_agent_dict(
+            {
+                "host": "local",
+                "workspace": "default",
+                "pane_id": "2",
+                "status": "needs_approval",
+                "reason": "Needs approval to run command",
+            }
+        )
+        assert agent["block_kind"] == "permission"
+
+    def test_normalize_non_blocked_has_empty_block_kind(self):
+        agent = normalize_agent_dict(
+            {
+                "host": "local",
+                "workspace": "default",
+                "pane_id": "3",
+                "status": "working",
+            }
+        )
+        assert agent["block_kind"] == ""
+
+    def test_explicit_block_kind_passthrough(self):
+        agent = normalize_agent_dict(
+            {
+                "host": "local",
+                "workspace": "default",
+                "pane_id": "4",
+                "status": "blocked",
+                "status_reason": "Needs approval",
+                "block_kind": "question",
+            }
+        )
+        assert agent["block_kind"] == "question"
 
 
 class TestAgentIdAndHostNormalization:

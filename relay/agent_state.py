@@ -7,6 +7,7 @@ import socket
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 VALID_STATUSES = {"blocked", "working", "done", "idle", "unknown"}
+VALID_BLOCK_KINDS = {"permission", "question"}
 
 # --- Session lifecycle defaults -------------------------------------------------
 # A polled agent must be absent from `herdr agent list` for RECONCILE_GRACE
@@ -48,6 +49,87 @@ def normalize_status(raw_status: Optional[str]) -> str:
         return "unknown"
     cleaned = str(raw_status).strip().lower().replace("-", "_").replace(" ", "_")
     return STATUS_MAP.get(cleaned, "unknown")
+
+
+# Heuristic tokens for classifying blocked episodes. Permission wins on ties
+# so phone approve/reject stays the default when signals conflict.
+_PERMISSION_HINTS = (
+    "approval",
+    "approve",
+    "permission",
+    "allow this",
+    "allow the",
+    "do you want",
+    "y/n",
+    "yes/no",
+    "tool call",
+    "run command",
+    "bash",
+    "write file",
+    "edit file",
+    "needs approval",
+    "awaiting approval",
+    "user confirmation",
+)
+_QUESTION_HINTS = (
+    "askuserquestion",
+    "ask user",
+    "user question",
+    "choose an option",
+    "select one",
+    "select an option",
+    "which approach",
+    "which option",
+    "pick a",
+    "waiting for user input",
+    "waiting for input",
+    "arrow keys",
+    "use arrow",
+    "❯",
+)
+
+
+def infer_block_kind(
+    status_reason: Optional[str] = None,
+    last_message: Optional[str] = None,
+    screen: Optional[str] = None,
+) -> str:
+    """Classify a blocked episode as permission vs TUI question.
+
+    Ambiguous or empty signals default to ``permission`` so existing
+    Approve/Reject phone flows remain the safe default. Explicit question
+    cues (AskUserQuestion, numbered menus, arrow-key prompts) flip to
+    ``question``.
+    """
+    blob = " ".join(
+        str(part or "") for part in (status_reason, last_message, screen)
+    ).lower()
+    if not blob.strip():
+        return "permission"
+
+    permission_hit = any(hint in blob for hint in _PERMISSION_HINTS)
+    question_hit = any(hint in blob for hint in _QUESTION_HINTS)
+
+    # Numbered TUI menus: "1. ..." or "❯ 1." / "(1)" style option lists.
+    if not question_hit and (
+        "❯" in blob
+        or "\n1." in blob
+        or blob.lstrip().startswith("1.")
+        or " 1. " in blob
+    ):
+        question_hit = True
+
+    if question_hit and not permission_hit:
+        return "question"
+    return "permission"
+
+
+def normalize_block_kind(raw_kind: Optional[str]) -> str:
+    """Normalize an explicit block_kind override; empty if unset/invalid."""
+    if not raw_kind:
+        return ""
+    cleaned = str(raw_kind).strip().lower()
+    return cleaned if cleaned in VALID_BLOCK_KINDS else ""
 
 
 def get_default_hostname(local_hostname: Optional[str] = None) -> str:
@@ -119,6 +201,16 @@ def normalize_agent_dict(raw: Dict[str, Any], local_hostname: Optional[str] = No
 
     quota = raw.get("quota") if isinstance(raw.get("quota"), dict) else None
 
+    status_reason = str(raw.get("status_reason") or raw.get("reason") or raw.get("message") or "")
+    last_message = str(raw.get("last_message") or raw.get("prompt") or "")
+    last_output = str(raw.get("last_output") or raw.get("output") or "")
+
+    explicit_kind = normalize_block_kind(raw.get("block_kind"))
+    if status == "blocked":
+        block_kind = explicit_kind or infer_block_kind(status_reason, last_message, last_output)
+    else:
+        block_kind = ""
+
     return {
         "id": agent_id,
         "host": str(host),
@@ -130,15 +222,17 @@ def normalize_agent_dict(raw: Dict[str, Any], local_hostname: Optional[str] = No
         # report has persisted long enough to be trusted (see
         # HerdrRelayDaemon.update_agent_status). False until confirmed.
         "blocked_confirmed": bool(raw.get("blocked_confirmed")),
+        # permission = Approve/Reject flow; question = TUI menu / AskUserQuestion.
+        "block_kind": block_kind,
         "agent_session_registered": session_registered,
-        "status_reason": str(raw.get("status_reason") or raw.get("reason") or raw.get("message") or ""),
+        "status_reason": status_reason,
         # --- Liveness: how the relay last heard about this session, and when ---
         "source": str(raw.get("source") or ""),
         "last_seen_at": now_iso,
         "agent_name": str(raw.get("agent_name") or raw.get("name") or "herdr-agent"),
         "tool_call": str(raw.get("tool_call") or raw.get("action") or ""),
-        "last_message": str(raw.get("last_message") or raw.get("prompt") or ""),
-        "last_output": str(raw.get("last_output") or raw.get("output") or ""),
+        "last_message": last_message,
+        "last_output": last_output,
         "pid": raw.get("pid"),
         "updated_at": updated_at,
         "metadata": raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {},
@@ -209,6 +303,7 @@ def complete_agent_update_message(
             "cwd", "harness", "harness_version", "model", "task_title",
             "git_repo", "git_branch", "git_dirty",
             "context_used", "context_limit", "quota", "cost_usd",
+            "block_kind", "blocked_confirmed",
         )
         # Merge only explicitly supplied fields or valid non-default updates
         for k, v in partial.items():
@@ -227,6 +322,19 @@ def complete_agent_update_message(
         # never sourced from the payload.
         merged["last_seen_at"] = partial.get("last_seen_at") or merged.get("last_seen_at")
         merged["id"] = agent_id
+        # Re-derive block_kind whenever the episode is blocked unless the
+        # payload explicitly supplied an override.
+        if merged.get("status") == "blocked":
+            if "block_kind" in raw_payload:
+                merged["block_kind"] = normalize_block_kind(raw_payload.get("block_kind")) or partial.get("block_kind") or "permission"
+            else:
+                merged["block_kind"] = infer_block_kind(
+                    merged.get("status_reason"),
+                    merged.get("last_message"),
+                    merged.get("last_output"),
+                )
+        else:
+            merged["block_kind"] = ""
     else:
         merged = partial
 

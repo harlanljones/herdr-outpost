@@ -1257,6 +1257,49 @@
       flex-shrink: 0;
     }
 
+
+    .sheet-blocked-banner[data-block-kind="question"] {
+      /* same alarm chrome; copy/controls swap via JS */
+    }
+    .block-kind-toggle {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-strong);
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.35rem 0.65rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      min-height: 36px;
+      white-space: nowrap;
+    }
+    .block-kind-toggle:hover {
+      color: var(--text-main);
+      border-color: var(--status-alarm-border);
+    }
+    .number-keys-row {
+      display: none;
+      align-items: center;
+      gap: 0.35rem;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .number-keys-row.visible {
+      display: flex;
+    }
+    .number-keys-row::-webkit-scrollbar {
+      display: none;
+    }
+    .number-keys-row .key-btn {
+      min-width: 44px;
+      justify-content: center;
+      padding: 0.3rem 0.5rem;
+    }
+
     /* Quick Keys Row & Bottom Input Bar */
     .sheet-interactive-bar {
       padding: 0.75rem 1rem;
@@ -1881,20 +1924,24 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         </div>
 
         <!-- Blocked Banner Inside Sheet -->
-        <div id="modalBlockedBanner" class="sheet-blocked-banner" style="display:none;">
-          <div style="display:flex; align-items:center; justify-content:space-between;">
-            <div style="font-size:12px; font-weight:800; text-transform:uppercase; color:var(--status-alarm-text); font-family:var(--font-mono);">
+        <div id="modalBlockedBanner" class="sheet-blocked-banner" style="display:none;" data-block-kind="permission">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+            <div id="modalBlockedTitle" style="font-size:12px; font-weight:800; text-transform:uppercase; color:var(--status-alarm-text); font-family:var(--font-mono);">
               ▲ Awaiting User Approval
             </div>
+            <button type="button" id="blockKindToggleBtn" class="block-kind-toggle" title="Switch between permission approval and TUI question controls">Question mode</button>
           </div>
           <div class="hinge-reason-box" id="modalBlockedReason">Awaiting prompt response...</div>
-          <div class="hinge-actions-row">
+          <div id="modalPermissionActions" class="hinge-actions-row">
             <button id="modalApproveBtn" class="btn-approve">✓ Approve</button>
             <button id="modalRejectBtn" class="btn-reject">✕ Reject</button>
             <button class="quick-chip" data-text="y">y</button>
             <button class="quick-chip" data-text="yes">yes</button>
             <button class="quick-chip" data-text="n">n</button>
             <button class="quick-chip" data-text="always">always allow</button>
+          </div>
+          <div id="modalQuestionHint" class="hinge-actions-row" style="display:none;">
+            <span style="font-size:12px; color:var(--text-secondary); font-family:var(--font-mono);">Use arrows / numbers below, then Enter</span>
           </div>
         </div>
 
@@ -1925,6 +1972,19 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             <button class="key-btn" data-key="Tab">⇥ Tab</button>
             <button class="key-btn" data-key="Up">↑ Up</button>
             <button class="key-btn" data-key="Down">↓ Down</button>
+            <button class="key-btn" data-key="Left">← Left</button>
+            <button class="key-btn" data-key="Right">→ Right</button>
+          </div>
+          <div id="numberKeysRow" class="number-keys-row" aria-label="TUI option numbers">
+            <button class="key-btn" data-key="1">1</button>
+            <button class="key-btn" data-key="2">2</button>
+            <button class="key-btn" data-key="3">3</button>
+            <button class="key-btn" data-key="4">4</button>
+            <button class="key-btn" data-key="5">5</button>
+            <button class="key-btn" data-key="6">6</button>
+            <button class="key-btn" data-key="7">7</button>
+            <button class="key-btn" data-key="8">8</button>
+            <button class="key-btn" data-key="9">9</button>
           </div>
 
           <div class="prompt-input-row">
@@ -2108,6 +2168,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         // a11y & Debounce
         lastFocusedElement: null,
         debouncedActions: new Set(),
+
+        // Per-agent override for blocked episode UI (permission vs question)
+        blockKindOverrides: new Map(),
       };
 
       // ======================================================================
@@ -2351,6 +2414,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         agent.contextLimit = typeof raw.contextLimit === 'number' ? raw.contextLimit : (typeof raw.context_limit === 'number' ? raw.context_limit : null);
         agent.quota = (raw.quota && typeof raw.quota === 'object') ? raw.quota : null;
         agent.costUsd = typeof raw.costUsd === 'number' ? raw.costUsd : (typeof raw.cost_usd === 'number' ? raw.cost_usd : null);
+        const bkRaw = raw.blockKind || raw.block_kind || '';
+        agent.blockKind = (bkRaw === 'question' || bkRaw === 'permission') ? bkRaw : '';
 
         return agent;
       }
@@ -2780,6 +2845,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           const prev = prevStateMap.get(id);
           const oldStatus = prev ? prev.status : undefined;
           const wasConfirmedBlocked = !!(prev && prev.status === 'blocked' && prev.blockedConfirmed !== false);
+          if (agent.status !== 'blocked' && id) {
+            state.blockKindOverrides.delete(id);
+          }
           if (agent.status === 'blocked' && agent.blockedConfirmed && !wasConfirmedBlocked) {
             sound.playBlocked();
             haptic([150, 80, 150]);
@@ -3051,15 +3119,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             '<div class="hinge-reason-box" style="margin-top:0.35rem;">' + escapeHtml(reason) + '</div>' +
           '</div>' +
           '<div class="hinge-container open" onclick="event.stopPropagation();">' +
-            '<div class="hinge-actions-row">' +
-              '<button class="btn-approve" data-action="approve" data-id="' + escapeHtml(id) + '">✓ Approve</button>' +
-              '<button class="btn-reject" data-action="reject" data-id="' + escapeHtml(id) + '">✕ Reject</button>' +
-              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="y">y</button>' +
-              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="yes">yes</button>' +
-              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="n">n</button>' +
-              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="always">always allow</button>' +
-              '<button class="btn-open-terminal" onclick="openModal(\'' + escapeHtml(id) + '\')">Terminal →</button>' +
-            '</div>' +
+            blockedHingeActionsHtml(agent) +
           '</div>' +
         '</div>';
       }
@@ -3082,15 +3142,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         if (isBlocked) {
           hingeHtml = '<div class="hinge-container open" onclick="event.stopPropagation();">' +
             '<div class="hinge-reason-box">' + escapeHtml(reason) + '</div>' +
-            '<div class="hinge-actions-row">' +
-              '<button class="btn-approve" data-action="approve" data-id="' + escapeHtml(id) + '">✓ Approve</button>' +
-              '<button class="btn-reject" data-action="reject" data-id="' + escapeHtml(id) + '">✕ Reject</button>' +
-              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="y">y</button>' +
-              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="yes">yes</button>' +
-              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="n">n</button>' +
-              '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="always">always allow</button>' +
-              '<button class="btn-open-terminal" onclick="openModal(\'' + escapeHtml(id) + '\')">Terminal →</button>' +
-            '</div>' +
+            blockedHingeActionsHtml(agent) +
           '</div>';
         }
 
@@ -3203,6 +3255,102 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         }
       }
 
+
+      // Mirror relay/agent_state.infer_block_kind for client-side screen refinement.
+      const PERMISSION_HINTS = [
+        'approval', 'approve', 'permission', 'allow this', 'allow the', 'do you want',
+        'y/n', 'yes/no', 'tool call', 'run command', 'bash', 'write file', 'edit file',
+        'needs approval', 'awaiting approval', 'user confirmation',
+      ];
+      const QUESTION_HINTS = [
+        'askuserquestion', 'ask user', 'user question', 'choose an option', 'select one',
+        'select an option', 'which approach', 'which option', 'pick a',
+        'waiting for user input', 'waiting for input', 'arrow keys', 'use arrow', '❯',
+      ];
+
+      function inferBlockKindClient(reason, message, screen) {
+        const blob = [reason || '', message || '', screen || ''].join(' ').toLowerCase();
+        if (!blob.trim()) return 'permission';
+        let permissionHit = PERMISSION_HINTS.some(h => blob.includes(h));
+        let questionHit = QUESTION_HINTS.some(h => blob.includes(h));
+        if (!questionHit && (blob.includes('❯') || blob.includes('\n1.') || blob.trimStart().startsWith('1.') || blob.includes(' 1. '))) {
+          questionHit = true;
+        }
+        if (questionHit && !permissionHit) return 'question';
+        return 'permission';
+      }
+
+      function resolveBlockKind(agent) {
+        if (!agent || (agent.status || '').toLowerCase() !== 'blocked') return '';
+        const id = agent.id || agent.paneId;
+        if (id && state.blockKindOverrides.has(id)) {
+          return state.blockKindOverrides.get(id);
+        }
+        const screen = (id && state.outputs.get(id)) || agent.lastOutput || '';
+        // Strip crude ANSI for heuristic matching
+        const plain = String(screen).replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').slice(-4000);
+        const inferred = inferBlockKindClient(agent.statusReason, agent.lastMessage, plain);
+        if (agent.blockKind === 'question' || agent.blockKind === 'permission') {
+          // Prefer stronger question signal from live screen when relay said permission.
+          if (agent.blockKind === 'permission' && inferred === 'question') return 'question';
+          return agent.blockKind;
+        }
+        return inferred;
+      }
+
+      function blockedHingeActionsHtml(agent) {
+        const id = agent.id || agent.paneId || 'unknown';
+        const kind = resolveBlockKind(agent);
+        if (kind === 'question') {
+          return '<div class="hinge-actions-row">' +
+            '<button class="key-btn" data-action="keys" data-id="' + escapeHtml(id) + '" data-key="Up">↑</button>' +
+            '<button class="key-btn" data-action="keys" data-id="' + escapeHtml(id) + '" data-key="Down">↓</button>' +
+            '<button class="key-btn" data-action="keys" data-id="' + escapeHtml(id) + '" data-key="Left">←</button>' +
+            '<button class="key-btn" data-action="keys" data-id="' + escapeHtml(id) + '" data-key="Right">→</button>' +
+            '<button class="key-btn" data-action="keys" data-id="' + escapeHtml(id) + '" data-key="Enter">↵</button>' +
+            '<button class="key-btn" data-action="keys" data-id="' + escapeHtml(id) + '" data-key="Escape">Esc</button>' +
+            '<button class="btn-open-terminal" onclick="openModal(\'' + escapeHtml(id) + '\')">Answer in Terminal →</button>' +
+          '</div>';
+        }
+        return '<div class="hinge-actions-row">' +
+          '<button class="btn-approve" data-action="approve" data-id="' + escapeHtml(id) + '">✓ Approve</button>' +
+          '<button class="btn-reject" data-action="reject" data-id="' + escapeHtml(id) + '">✕ Reject</button>' +
+          '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="y">y</button>' +
+          '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="yes">yes</button>' +
+          '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="n">n</button>' +
+          '<button class="quick-chip" data-action="custom" data-id="' + escapeHtml(id) + '" data-text="always">always allow</button>' +
+          '<button class="btn-open-terminal" onclick="openModal(\'' + escapeHtml(id) + '\')">Terminal →</button>' +
+        '</div>';
+      }
+
+      function applyBlockedModeUI(kind) {
+        const banner = document.getElementById('modalBlockedBanner');
+        const title = document.getElementById('modalBlockedTitle');
+        const toggle = document.getElementById('blockKindToggleBtn');
+        const perm = document.getElementById('modalPermissionActions');
+        const hint = document.getElementById('modalQuestionHint');
+        const nums = document.getElementById('numberKeysRow');
+        const isQuestion = kind === 'question';
+        if (banner) banner.setAttribute('data-block-kind', isQuestion ? 'question' : 'permission');
+        if (title) title.textContent = isQuestion ? '▲ Awaiting Input' : '▲ Awaiting User Approval';
+        if (toggle) toggle.textContent = isQuestion ? 'Permission mode' : 'Question mode';
+        if (perm) perm.style.display = isQuestion ? 'none' : 'flex';
+        if (hint) hint.style.display = isQuestion ? 'flex' : 'none';
+        if (nums) nums.classList.toggle('visible', isQuestion);
+      }
+
+      function toggleBlockKindOverride() {
+        if (!state.selectedAgentId) return;
+        const agent = state.agents.find(a => (a.id || a.paneId) === state.selectedAgentId);
+        if (!agent || (agent.status || '').toLowerCase() !== 'blocked') return;
+        const current = resolveBlockKind(agent);
+        const next = current === 'question' ? 'permission' : 'question';
+        state.blockKindOverrides.set(state.selectedAgentId, next);
+        updateModalDetails(agent);
+        renderUI();
+        showToast(next === 'question' ? 'TUI question controls' : 'Permission controls');
+      }
+
       function updateModalDetails(agent) {
         const id = agent.id || agent.paneId || '';
         const harness = agent.harness || 'Agent';
@@ -3243,8 +3391,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             reasonEl.insertAdjacentHTML('afterend',
               '<div class="unverified-tag" style="margin-top:0.35rem; align-self:flex-start;" title="herdr has no lifecycle session registered for this pane; this block signal may be a false positive">? UNVERIFIED</div>');
           }
+          applyBlockedModeUI(resolveBlockKind(agent));
         } else {
           blockedBanner.style.display = 'none';
+          applyBlockedModeUI('');
+          const id = agent.id || agent.paneId;
+          if (id) state.blockKindOverrides.delete(id);
         }
       }
 
@@ -3344,6 +3496,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
         if (state.selectedAgentId === key) {
           renderTerminalOutput(output);
+          const curr = state.agents.find(a => (a.id || a.paneId) === key);
+          if (curr && (curr.status || '').toLowerCase() === 'blocked' && !state.blockKindOverrides.has(key)) {
+            applyBlockedModeUI(resolveBlockKind(curr));
+          }
         }
       }
 
@@ -3368,24 +3524,28 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         Tab: '\t',
         Up: '\x1b[A',
         Down: '\x1b[B',
+        Left: '\x1b[D',
+        Right: '\x1b[C',
+        1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9',
       };
 
-      function sendQuickKey(key) {
-        if (!state.selectedAgentId) return;
-        if (!debounceAction('key_' + key, 200)) return;
+      function sendQuickKey(key, targetAgentId) {
+        const agentId = targetAgentId || state.selectedAgentId;
+        if (!agentId) return;
+        if (!debounceAction('key_' + agentId + '_' + key, 200)) return;
 
         sound.playClick();
         haptic(20);
 
         if (key === 'CtrlC') {
-          sendAgentAction('interrupt');
+          sendSocketAction({ type: 'interrupt', agent_id: agentId });
           showToast('Sent Interrupt (Ctrl+C)');
           return;
         }
 
         const seq = QUICK_KEY_SEQUENCES[key];
-        if (seq) {
-          sendAgentAction('send_keys', { keys: seq });
+        if (seq !== undefined) {
+          sendSocketAction({ type: 'send_keys', agent_id: agentId, keys: seq });
         }
       }
 
@@ -3691,8 +3851,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             sendApproval(action, null, id);
           } else if (action === 'custom') {
             sendApproval('custom', (text || '') + '\n', id);
+          } else if (action === 'keys') {
+            sendQuickKey(btn.dataset.key, id);
           }
         });
+
+        const blockKindToggleBtn = document.getElementById('blockKindToggleBtn');
+        if (blockKindToggleBtn) {
+          blockKindToggleBtn.addEventListener('click', toggleBlockKindOverride);
+        }
 
         // Modal Controls
         document.getElementById('modalCloseBtn').addEventListener('click', closeModal);

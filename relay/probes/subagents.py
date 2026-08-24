@@ -28,8 +28,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from . import claude_code as claude_code_probe
-
-OPENCODE_DB_PATH = os.path.expanduser("~/.local/share/opencode/opencode.db")
+from .opencode import OPENCODE_DB_PATH, _clean_model
 
 # A subagent counts as active when its session data was written more recently
 # than this. Deliberately generous: quiet-but-running agents should flip to
@@ -107,22 +106,6 @@ def _normalize_ms(epoch_ms: Any) -> Optional[float]:
     if value < 10_000_000_000:  # seconds-scale timestamp
         return value
     return value / 1000.0
-
-
-def _clean_model(raw_model: Any) -> str:
-    """opencode's session.model is a JSON blob like
-    {"id":"...","providerID":"opencode","variant":"..."}; surface the bare id."""
-    text = str(raw_model or "").strip()
-    if not text:
-        return ""
-    if text.startswith("{"):
-        try:
-            parsed = json.loads(text)
-            if isinstance(parsed, dict):
-                return str(parsed.get("id") or "")
-        except json.JSONDecodeError:
-            return ""
-    return text
 
 
 def _opencode_subagents(root_session_id: str, now_epoch: float) -> List[Dict[str, Any]]:

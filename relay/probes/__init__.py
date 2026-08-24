@@ -72,6 +72,7 @@ def _load_probes():
     from . import claude_code as claude_probe
     from . import cline as cline_probe
     from . import antigravity as antigravity_probe
+    from . import opencode as opencode_probe
     from . import subagents as subagents_probe
 
     def accepts_agent_session(fn) -> bool:
@@ -86,6 +87,7 @@ def _load_probes():
         (claude_probe.probe, False),
         (cline_probe.probe, False),
         (antigravity_probe.probe, False),
+        (opencode_probe.probe, True),
         (subagents_probe.probe, True),
     ]
 

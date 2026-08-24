@@ -3557,8 +3557,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           const tokens = (node.tokens != null)
             ? '<span class="tree-tokens" title="' + Number(node.tokens).toLocaleString() + ' tokens">' + formatTokenCount(node.tokens) + ' tok</span>'
             : '';
-          const time = node.updatedAt
-            ? '<span class="tree-time">' + escapeHtml(formatRelativeTime(node.updatedAt)) + '</span>'
+          const nodeTs = node.updatedAt || node.updated_at || '';
+          const time = nodeTs
+            ? '<span class="tree-time">' + escapeHtml(formatRelativeTime(nodeTs)) + '</span>'
             : '';
 
           const rowInner =
@@ -3579,9 +3580,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             let meta = '';
             if (node.model) meta += '<span>model: ' + escapeHtml(node.model) + '</span>';
             if (node.id) meta += '<span>id \u2026' + escapeHtml(String(node.id).slice(-6)) + '</span>';
-            if (node.updatedAt) {
+            if (nodeTs) {
               try {
-                meta += '<span>written: ' + escapeHtml(new Date(node.updatedAt).toLocaleString()) + '</span>';
+                meta += '<span>written: ' + escapeHtml(new Date(nodeTs).toLocaleString()) + '</span>';
               } catch (e) {}
             }
             html += '<div class="tree-node-meta">' + meta + '</div>';

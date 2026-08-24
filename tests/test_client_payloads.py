@@ -11,7 +11,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
-from agent_state import normalize_agent_dict, normalize_status
+from agent_state import (
+    agents_snapshot_message,
+    normalize_agent_dict,
+    normalize_status,
+)
 
 
 class TestEventStructures:
@@ -208,3 +212,41 @@ class TestClientCommandSchemas:
         encoded = json.dumps(payload)
         decoded = json.loads(encoded)
         assert decoded == payload
+
+
+class TestSubagentTreePayload:
+    """Subagent tree fields ride the existing snapshot/update payloads."""
+
+    def test_snapshot_with_tree_is_json_serializable(self):
+        agent = normalize_agent_dict({
+            "host": "local", "workspace": "w", "pane_id": "1",
+            "status": "working",
+            "session_id": "ses_root",
+            "subagents": [
+                {
+                    "id": "ses_child_1",
+                    "title": "Explore layout (@explore subagent)",
+                    "kind": "explore",
+                    "model": "sonnet-4",
+                    "tokens": 1200,
+                    "updated_at": "2026-08-24T12:00:00+00:00",
+                    "active": True,
+                    "children": [],
+                }
+            ],
+        })
+        message = agents_snapshot_message({"local:w:1": agent})
+
+        decoded = json.loads(json.dumps(message))
+        shipped = decoded["agents"][0]
+        assert shipped["session_id"] == "ses_root"
+        assert shipped["subagents"][0]["id"] == "ses_child_1"
+        assert shipped["subagents"][0]["tokens"] == 1200
+
+    def test_agents_without_trees_ship_empty_list_not_null(self):
+        agent = normalize_agent_dict({
+            "host": "local", "workspace": "w", "pane_id": "2",
+        })
+        message = agents_snapshot_message({"local:w:2": agent})
+        decoded = json.loads(json.dumps(message))
+        assert decoded["agents"][0]["subagents"] == []

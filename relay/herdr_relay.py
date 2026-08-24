@@ -626,7 +626,13 @@ class HerdrRelayDaemon:
         pid = p.get("pid") or await self._resolve_pane_pid(str(pane_id))
 
         try:
-            found = probe_enrich(agent_id, cwd, pid, harness)
+            found = probe_enrich(
+                agent_id,
+                cwd,
+                pid,
+                harness,
+                agent_session=p.get("agent_session"),
+            )
         except Exception as err:
             logger.debug(f"enrichment failed for {agent_id}: {err}")
             return

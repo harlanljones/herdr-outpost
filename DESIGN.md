@@ -82,6 +82,12 @@ A disciplined 3-tier ramp with strict $\ge 1.25$ ratio between steps:
 - Interactive quick keys bar (↵ Enter, ⎋ Esc, ⌃C Interrupt, ␣ Space, ⇥ Tab, ↑ Up, ↓ Down).
 - Command prompt input with 16px font floor to prevent mobile browser auto-zoom.
 
+### 4b. Subagent Tree View (`/tree`)
+- Header nav button routes to a deep-linkable `/tree` view; closing the terminal sheet returns to whichever base view (fleet or tree) was active.
+- Roots grouped by repo zone (same sticky headers and urgency ordering as the fleet); each root row carries harness/model tags, annunciator status plate, subagent count badge, live task title, and an explicit `Terminal →` button into the parent's session sheet.
+- Subagent nodes render as an indented connector rail with kind tags (`@explore`), honest ACTIVITY plates (`● ACTIVE` / `○ QUIET`, working/idle palette — never lifecycle wording), tabular-numeral token totals, and relative write time. Tap toggles inline expansion revealing model, id suffix, and full write timestamp; nested children recurse.
+- Expansion state survives live WebSocket re-renders; 44×44px touch targets, glyph+label activity cues, `prefers-reduced-motion` honored.
+
 ### 5. Settings & Device Pairing
 - Instant QR-code mobile pairing with automatic URL token persistence and URL scrubbing.
 - Web Push notifications integration with VAPID negotiation, Service Worker offline caching, and direct notification click deep-linking (`/session/{id}?action={action}`).

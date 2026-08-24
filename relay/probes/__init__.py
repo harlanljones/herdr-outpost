@@ -12,6 +12,7 @@ for v1 (their session files live on the remote machine).
 
 from __future__ import annotations
 
+import inspect
 import logging
 import time
 from typing import Any, Dict, Optional
@@ -25,12 +26,22 @@ PROBE_TTL_SECONDS = 10.0
 _cache: Dict[str, tuple] = {}
 
 
-def enrich(agent_id: str, cwd: str, pid: Optional[int], harness: str) -> Dict[str, Any]:
+def enrich(
+    agent_id: str,
+    cwd: str,
+    pid: Optional[int],
+    harness: str,
+    agent_session: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Return cached or freshly-probed enrichment fields for one agent.
 
     `harness` is herdr's own label ("claude", "cline", ...); probes are tried
     in a fixed order and merged, cheapest/most-certain first, so a later
     probe's absence never clobbers an earlier probe's finding.
+
+    `agent_session` is herdr's lifecycle-session envelope for the pane (with
+    the harness-native session id in `value`); only probes that declare an
+    `agent_session` parameter receive it.
     """
     now = time.monotonic()
     cached = _cache.get(agent_id)
@@ -38,9 +49,12 @@ def enrich(agent_id: str, cwd: str, pid: Optional[int], harness: str) -> Dict[st
         return cached[1]
 
     result: Dict[str, Any] = {}
-    for probe in _PROBES:
+    for probe, accepts_session in _PROBES:
         try:
-            partial = probe(cwd=cwd, pid=pid, harness=harness)
+            kwargs: Dict[str, Any] = {"cwd": cwd, "pid": pid, "harness": harness}
+            if accepts_session:
+                kwargs["agent_session"] = agent_session
+            partial = probe(**kwargs)
         except Exception as err:  # a probe must never break the poll loop
             logger.debug(f"probe {probe.__name__} failed for {agent_id}: {err}")
             partial = None
@@ -58,8 +72,22 @@ def _load_probes():
     from . import claude_code as claude_probe
     from . import cline as cline_probe
     from . import antigravity as antigravity_probe
+    from . import subagents as subagents_probe
 
-    return [git_probe.probe, claude_probe.probe, cline_probe.probe, antigravity_probe.probe]
+    def accepts_agent_session(fn) -> bool:
+        params = inspect.signature(fn).parameters
+        return "agent_session" in params or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+        )
+
+    # Subagents last: most expensive (SQLite / transcript scans), least certain.
+    return [
+        (git_probe.probe, False),
+        (claude_probe.probe, False),
+        (cline_probe.probe, False),
+        (antigravity_probe.probe, False),
+        (subagents_probe.probe, True),
+    ]
 
 
 _PROBES = _load_probes()

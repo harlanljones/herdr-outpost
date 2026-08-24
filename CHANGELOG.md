@@ -2,6 +2,21 @@
 
 All notable changes to herdr-outpost are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Subagent tree view at `/tree` (header nav button, deep-linkable): each root
+  agent renders its harness subagent sessions grouped by repo. Tap a node to
+  expand inline activity detail; `Terminal →` opens the parent agent's session
+  sheet. OpenCode trees come from its local session store (`session.parent_id`);
+  Claude Code from transcript sidechains
+  (`~/.claude/projects/<slug>/<sessionId>/subagents/`). cline and antigravity-cli
+  expose no parent links and show childless.
+- Relay schema additions in `relay/agent_state.py` (shared contract): `session_id`
+  and nested `subagents[]` on every normalized agent; subagent `active` is a
+  recent-writes activity signal, never a fabricated lifecycle status.
+
 ## [1.0.0] - 2026-08-22
 
 First stable release of the remote dashboard and relay gateway for

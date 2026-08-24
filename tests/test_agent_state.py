@@ -946,3 +946,101 @@ class TestDetectionHealth:
         merged = complete_agent_update_message(poll_event, current=current_state)["agent"]
         assert merged["agent_session_registered"] is False
         assert datetime.datetime.fromisoformat(merged["last_seen_at"]).tzinfo is not None
+
+
+class TestSubagentTreeSchema:
+    """session_id + subagents fields (shared contract for the /tree view)."""
+
+    TREE = [
+        {
+            "id": "ses_child_1", "title": "Explore layout (@explore subagent)",
+            "kind": "explore", "model": "sonnet-4", "tokens": 1200,
+            "updated_at": iso_utc(), "active": True, "children": [],
+        }
+    ]
+
+    def test_normalize_defaults_when_absent(self):
+        norm = normalize_agent_dict({"host": "local", "workspace": "w", "pane_id": "1"})
+        assert norm["session_id"] == ""
+        assert norm["subagents"] == []
+
+    def test_session_id_derived_from_agent_session_envelope(self):
+        norm = normalize_agent_dict({
+            "host": "local", "workspace": "w", "pane_id": "1",
+            "agent_session": {"agent": "opencode", "kind": "id", "value": "ses_abc"},
+        })
+        assert norm["session_id"] == "ses_abc"
+
+    def test_explicit_session_id_wins_over_envelope(self):
+        norm = normalize_agent_dict({
+            "host": "local", "workspace": "w", "pane_id": "1",
+            "session_id": "sess-explicit",
+            "agent_session": {"value": "ses_from_envelope"},
+        })
+        assert norm["session_id"] == "sess-explicit"
+
+    def test_subagents_passthrough_only_for_list_payloads(self):
+        norm = normalize_agent_dict({
+            "host": "local", "workspace": "w", "pane_id": "1",
+            "subagents": self.TREE,
+        })
+        assert norm["subagents"] == self.TREE
+        # Non-list junk degrades to [] instead of poisoning the payload.
+        norm_bad = normalize_agent_dict({
+            "host": "local", "workspace": "w", "pane_id": "1",
+            "subagents": "all my subagents",
+        })
+        assert norm_bad["subagents"] == []
+
+    def test_snapshot_roundtrip_preserves_tree(self):
+        agent = normalize_agent_dict({
+            "host": "local", "workspace": "w", "pane_id": "1",
+            "status": "working",
+            "session_id": "ses_root",
+            "subagents": self.TREE,
+        })
+        snapshot = agents_snapshot_message({"local:w:1": agent})
+        rebuilt = apply_agent_message({}, snapshot)
+        assert rebuilt["local:w:1"]["session_id"] == "ses_root"
+        assert rebuilt["local:w:1"]["subagents"] == self.TREE
+
+    def test_merge_preserves_tree_when_hook_event_omits_it(self):
+        current_state = {
+            "local:w:p1": {
+                **make_current_agent("local:w:p1"),
+                "session_id": "ses_root",
+                "subagents": self.TREE,
+            }
+        }
+        hook_event = {"host": "local", "workspace": "w", "pane_id": "p1", "status": "working"}
+        merged = complete_agent_update_message(hook_event, current=current_state)["agent"]
+        assert merged["session_id"] == "ses_root"
+        assert merged["subagents"] == self.TREE
+
+    def test_merge_refreshes_session_id_via_poll_envelope(self):
+        current_state = {
+            "local:w:p1": {
+                **make_current_agent("local:w:p1"),
+                "session_id": "ses_old",
+                "subagents": [],
+            }
+        }
+        poll_event = {
+            "host": "local", "workspace": "w", "pane_id": "p1",
+            "agent_status": "working",
+            "agent_session": {"agent": "opencode", "kind": "id", "value": "ses_new"},
+        }
+        merged = complete_agent_update_message(poll_event, current=current_state)["agent"]
+        assert merged["session_id"] == "ses_new"
+
+    def test_merge_accepts_probe_supplied_tree(self):
+        current_state = {aid: make_current_agent(aid) for aid in ["local:w:p1"]}
+        probe_event = {
+            "host": "local", "workspace": "w", "pane_id": "p1",
+            "agent_status": "working",
+            "session_id": "ses_root",
+            "subagents": self.TREE,
+        }
+        merged = complete_agent_update_message(probe_event, current=current_state)["agent"]
+        assert merged["session_id"] == "ses_root"
+        assert merged["subagents"] == self.TREE

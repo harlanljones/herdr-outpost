@@ -65,6 +65,12 @@ coding agents and multiple harnesses.
   terminal — it's the primary phone action.
 - Path-based session routing (`/session/{id}`) enables direct bookmarking, notification deep-linking,
   and browser history navigation (pushState/popstate) directly into focused terminal sheets.
+- Harness subagent trees are derivable and surfaced at `/tree`: OpenCode via its local SQLite
+  session store (`session.parent_id`, keyed off herdr's exact `agent_session` pane identity), and
+  Claude Code via its transcript sidechains (`~/.claude/projects/<slug>/<sessionId>/subagents/`).
+  cline and antigravity-cli expose no parent links, so their agents show childless. A subagent's
+  `active` flag means "session data written recently" — an activity signal, never a fabricated
+  lifecycle status.
 - Per-session context-window usage is directly readable for Claude Code and cline via their local
   session files. antigravity-cli does not expose a readable per-session context figure (session
   data is protobuf inside SQLite); it exposes quota-window usage instead via a collector already

@@ -201,6 +201,18 @@ def normalize_agent_dict(raw: Dict[str, Any], local_hostname: Optional[str] = No
 
     quota = raw.get("quota") if isinstance(raw.get("quota"), dict) else None
 
+    # Harness-native session identity: the lifecycle session id herdr reports
+    # for this pane (e.g. opencode "ses_..."), overridable by an explicit
+    # session_id key from probes/reporters. Empty when unknown.
+    agent_session = raw.get("agent_session") if isinstance(raw.get("agent_session"), dict) else None
+    session_id = str(raw.get("session_id") or (agent_session or {}).get("value") or "")
+
+    # Subagent tree rooted at this agent's main harness session. Only payloads
+    # that explicitly carry "subagents" (the local subagents probe) populate
+    # it; everyone else gets [] without clobbering merged evidence.
+    subagents_raw = raw.get("subagents")
+    subagents = subagents_raw if isinstance(subagents_raw, list) else []
+
     status_reason = str(raw.get("status_reason") or raw.get("reason") or raw.get("message") or "")
     last_message = str(raw.get("last_message") or raw.get("prompt") or "")
     last_output = str(raw.get("last_output") or raw.get("output") or "")
@@ -246,6 +258,9 @@ def normalize_agent_dict(raw: Dict[str, Any], local_hostname: Optional[str] = No
         "harness_version": str(raw.get("harness_version") or ""),
         "model": str(raw.get("model") or ""),
         "task_title": str(raw.get("task_title") or raw.get("terminal_title_stripped") or raw.get("terminal_title") or ""),
+        # --- Subagent tree: harness-native session id + child subagents ---
+        "session_id": session_id,
+        "subagents": subagents,
         "git_repo": str(raw.get("git_repo") or ""),
         "git_branch": str(raw.get("git_branch") or ""),
         "git_dirty": bool(raw.get("git_dirty")) if raw.get("git_dirty") is not None else None,
@@ -297,6 +312,8 @@ def complete_agent_update_message(
             "task_title": ("task_title", "terminal_title_stripped", "terminal_title"),
             "status_reason": ("status_reason", "reason", "message"),
             "agent_session_registered": ("agent_session",),
+            # session_id may arrive directly or via the agent_session envelope.
+            "session_id": ("session_id", "agent_session"),
         }
         mergeable_extra = (
             "status_reason", "tool_call", "last_message", "last_output", "tab", "pid", "metadata",
@@ -304,6 +321,7 @@ def complete_agent_update_message(
             "git_repo", "git_branch", "git_dirty",
             "context_used", "context_limit", "quota", "cost_usd",
             "block_kind", "blocked_confirmed",
+            "session_id", "subagents",
         )
         # Merge only explicitly supplied fields or valid non-default updates
         for k, v in partial.items():

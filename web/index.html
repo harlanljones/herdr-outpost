@@ -736,6 +736,300 @@
     }
 
     /* ==========================================================================
+       7b. Subagent Tree View (/tree)
+       ========================================================================== */
+    .tree-view-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.25rem 0 0.75rem;
+    }
+    .tree-view-title {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      min-width: 0;
+    }
+    .tree-view-title h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    .tree-view-subtitle {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tree-back-btn {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      background: var(--bg-surface-raised);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      padding: 0 0.9rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tree-back-btn:hover {
+      background: var(--bg-surface-hover);
+      color: var(--text-main);
+    }
+
+    .tree-root-row {
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .tree-root-row:last-child {
+      border-bottom: none;
+    }
+    .tree-root-line {
+      display: flex;
+      align-items: stretch;
+    }
+    .tree-root-main {
+      flex: 1;
+      min-width: 0;
+      min-height: 44px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.55rem 0.6rem 0.55rem 0.9rem;
+      background: none;
+      border: none;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: background-color var(--transition-fast);
+    }
+    .tree-root-main:hover:not([disabled]) {
+      background: var(--bg-surface-hover);
+    }
+    .tree-root-main[disabled] {
+      cursor: default;
+    }
+    .tree-caret {
+      width: 14px;
+      height: 14px;
+      flex: none;
+      color: var(--text-muted);
+      transition: transform var(--transition-fast);
+    }
+    .tree-root-main[aria-expanded="true"] .tree-caret {
+      transform: rotate(90deg);
+    }
+    .tree-root-task {
+      flex-basis: 100%;
+      font-size: 14px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tree-count-badge {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      color: var(--accent-primary);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      padding: 0.1rem 0.45rem;
+      border-radius: var(--radius-full);
+      white-space: nowrap;
+    }
+    .tree-root-actions {
+      display: flex;
+      align-items: center;
+      padding-right: 0.6rem;
+    }
+    .tree-terminal-btn {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--status-done-text);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      padding: 0 0.75rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color var(--transition-fast), background-color var(--transition-fast);
+    }
+    .tree-terminal-btn:hover {
+      border-color: var(--status-done-border);
+      background: var(--status-done-bg);
+    }
+
+    .tree-children {
+      padding: 0 0.9rem 0.6rem 1.9rem;
+    }
+    .tree-indent {
+      margin-left: 0.55rem;
+      padding-left: 0.85rem;
+      border-left: 1px solid var(--border-default);
+    }
+    .tree-node-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .tree-node-row {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      min-height: 44px;
+      width: 100%;
+      padding: 0.3rem 0.6rem 0.3rem 0.25rem;
+      background: none;
+      border: none;
+      border-radius: var(--radius-sm);
+      color: inherit;
+      font: inherit;
+      text-align: left;
+    }
+    button.tree-node-row {
+      cursor: pointer;
+      transition: background-color var(--transition-fast);
+    }
+    button.tree-node-row:hover {
+      background: var(--bg-surface-hover);
+    }
+    .tree-node-toggle-icon {
+      width: 12px;
+      flex: none;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      transition: transform var(--transition-fast);
+    }
+    .tree-node-row[aria-expanded="true"] .tree-node-toggle-icon {
+      transform: rotate(90deg);
+    }
+    .tree-kind-tag {
+      font-size: 11px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      background: var(--bg-surface-raised);
+      border: 1px solid var(--border-default);
+      padding: 0.08rem 0.35rem;
+      border-radius: var(--radius-sm);
+      white-space: nowrap;
+    }
+    .tree-node-title {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tree-plate {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.28rem;
+      font-size: 11px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      letter-spacing: 0.06em;
+      padding: 0.14rem 0.42rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid;
+      white-space: nowrap;
+    }
+    .tree-plate.active {
+      color: var(--status-working-text);
+      border-color: var(--status-working-border);
+      background: var(--status-working-bg);
+    }
+    .tree-plate.quiet {
+      color: var(--status-idle-text);
+      border-color: var(--status-idle-border);
+      background: var(--status-idle-bg);
+    }
+    .tree-tokens {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .tree-time {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    @media (max-width: 480px) {
+      .tree-time {
+        display: none;
+      }
+    }
+    .tree-node-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem 0.9rem;
+      align-items: center;
+      padding: 0 0.6rem 0.45rem 1.92rem;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .tree-empty {
+      padding: 2.5rem 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      text-align: center;
+      color: var(--text-secondary);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+    }
+    .tree-empty-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .tree-empty-desc {
+      font-size: 14px;
+      max-width: 34rem;
+      line-height: 1.5;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .tree-caret,
+      .tree-node-toggle-icon {
+        transition: none;
+      }
+    }
+
+    /* ==========================================================================
        8. Annunciator Agent Row (3-Line Standard + Hinge Expansion)
        ========================================================================== */
     .agent-row {
@@ -1792,6 +2086,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <span id="connectionStatusText" class="connection-text">Connecting...</span>
       </div>
 
+      <!-- Subagent Tree View -->
+      <button id="treeViewBtn" class="icon-btn" title="Subagent Tree" aria-label="Open Subagent Tree View">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="4" r="2"></circle>
+          <circle cx="5" cy="20" r="2"></circle>
+          <circle cx="19" cy="20" r="2"></circle>
+          <line x1="12" y1="6" x2="12" y2="10"></line>
+          <path d="M12 10c0 3.5-7 2.5-7 8"></path>
+          <path d="M12 10c0 3.5 7 2.5 7 8"></path>
+        </svg>
+      </button>
+
       <!-- Theme Switcher -->
       <button id="themeToggleBtn" class="icon-btn" title="Toggle Theme" aria-label="Toggle Theme">
         <svg id="moonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1875,6 +2181,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <!-- Repo-Grouped Fleet Container -->
       <section class="fleet-container" id="fleetContainer" aria-live="polite" aria-label="Agent Fleet Zones">
         <!-- Dynamically Rendered Repo Zones & Rows -->
+      </section>
+
+      <!-- Subagent Tree View (/tree) -->
+      <section id="treeView" style="display:none;" aria-label="Subagent Tree">
+        <div class="tree-view-header">
+          <div class="tree-view-title">
+            <h2>Subagent Tree</h2>
+            <span class="tree-view-subtitle" id="treeSubtitle"></span>
+          </div>
+          <button id="treeBackBtn" class="tree-back-btn">← Fleet</button>
+        </div>
+        <div id="treeContainer" aria-live="polite"></div>
       </section>
 
       <!-- Empty State Container -->
@@ -2171,12 +2489,20 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
         // Per-agent override for blocked episode UI (permission vs question)
         blockKindOverrides: new Map(),
+
+        // Base view ('fleet' | 'tree') and per-node tree expansion memory.
+        // Session sheets overlay whichever base view is active.
+        currentView: 'fleet',
+        treeExpanded: new Map(),
       };
 
       // ======================================================================
       // Router (Path-Based Session Links)
       // ======================================================================
       function parseRoute(pathname) {
+        if (/^\/tree\/*$/.test(pathname || '')) {
+          return { view: 'tree' };
+        }
         const match = /^\/session\/([^\/]+)\/*$/.exec(pathname || '');
         if (match) {
           let agentId = match[1];
@@ -2192,6 +2518,25 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         return '/session/' + encodeURIComponent(String(agentId)) + window.location.search;
       }
 
+      function fleetBasePath() {
+        return (state.currentView === 'tree' ? '/tree' : '/') + window.location.search;
+      }
+
+      function setBaseView(view) {
+        if (state.currentView === view) return;
+        state.currentView = view;
+        syncViewVisibility();
+        if (view === 'tree') renderTreeView();
+      }
+
+      function syncViewVisibility() {
+        const treeActive = state.currentView === 'tree';
+        const controlsBar = document.querySelector('.controls-bar');
+        if (controlsBar) controlsBar.style.display = treeActive ? 'none' : '';
+        const treeSection = document.getElementById('treeView');
+        if (treeSection) treeSection.style.display = treeActive ? 'block' : 'none';
+      }
+
       function navigate(path, replace) {
         try {
           if (replace && typeof history.replaceState === 'function') {
@@ -2205,6 +2550,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
       function applyRoute() {
         const route = parseRoute(window.location.pathname);
+        // Session routes leave the base view untouched (the sheet overlays it);
+        // /tree and / switch the base view explicitly.
+        if (route.view === 'tree') {
+          setBaseView('tree');
+        } else if (route.view === 'fleet') {
+          setBaseView('fleet');
+        }
         if (route.view === 'session' && route.agentId) {
           if (state.selectedAgentId !== route.agentId) {
             openModal(route.agentId, { fromRoute: true });
@@ -2416,6 +2768,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         agent.costUsd = typeof raw.costUsd === 'number' ? raw.costUsd : (typeof raw.cost_usd === 'number' ? raw.cost_usd : null);
         const bkRaw = raw.blockKind || raw.block_kind || '';
         agent.blockKind = (bkRaw === 'question' || bkRaw === 'permission') ? bkRaw : '';
+
+        // Subagent tree identity (relay/agent_state.py schema)
+        agent.sessionId = raw.sessionId || raw.session_id || '';
+        agent.subagents = Array.isArray(raw.subagents) ? raw.subagents : [];
 
         return agent;
       }
@@ -2877,6 +3233,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       function renderUI() {
         renderFilterCounts();
         renderFleetPanels();
+        if (state.currentView === 'tree') renderTreeView();
       }
 
       function renderFilterCounts() {
@@ -2944,9 +3301,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           return true;
         });
 
-        // 1. Render Top ALARM Strip
+        // 1. Render Top ALARM Strip (fleet view only; tree view hides fleet chrome)
         const blockedAgents = filtered.filter(a => (a.status || '').toLowerCase() === 'blocked');
-        if (blockedAgents.length > 0) {
+        if (blockedAgents.length > 0 && state.currentView !== 'tree') {
           alarmStrip.style.display = 'flex';
           document.getElementById('alarmCountBadge').textContent = blockedAgents.length + ' BLOCKED';
           alarmCardsContainer.innerHTML = blockedAgents.map(agent => renderAlarmCardHtml(agent)).join('');
@@ -2958,7 +3315,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         // 2. Handle Empty States (Context-Aware)
         if (filtered.length === 0) {
           fleetContainer.innerHTML = '';
-          emptyState.style.display = 'flex';
+          emptyState.style.display = state.currentView === 'tree' ? 'none' : 'flex';
 
           if (state.agents.length === 0) {
             emptyTitle.textContent = 'No Active Agents';
@@ -3168,6 +3525,180 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       }
 
       // ======================================================================
+      // Subagent Tree View (/tree)
+      // ======================================================================
+      function countTreeNodes(nodes) {
+        let n = 0;
+        for (const node of (nodes || [])) {
+          n += 1 + countTreeNodes(node.children);
+        }
+        return n;
+      }
+
+      function treeActivityPlate(node) {
+        // Honest activity signal from the relay (recent session writes) --
+        // deliberately NOT phrased as a lifecycle status.
+        return node.active
+          ? '<span class="tree-plate active" title="Session data written recently">&#9679; ACTIVE</span>'
+          : '<span class="tree-plate quiet" title="No recent session writes">&#9675; QUIET</span>';
+      }
+
+      function renderSubagentNodesHtml(agentId, nodes) {
+        if (!nodes || !nodes.length) return '';
+        return '<ul class="tree-node-list">' + nodes.map(node => {
+          const children = Array.isArray(node.children) ? node.children : [];
+          const hasChildren = children.length > 0;
+          const key = agentId + '::' + (node.id || '');
+          const expanded = hasChildren && !!state.treeExpanded.get(key);
+          const title = node.title || node.id || '(untitled subagent)';
+          const kindTag = node.kind
+            ? '<span class="tree-kind-tag">@' + escapeHtml(node.kind) + '</span>'
+            : '';
+          const tokens = (node.tokens != null)
+            ? '<span class="tree-tokens" title="' + Number(node.tokens).toLocaleString() + ' tokens">' + formatTokenCount(node.tokens) + ' tok</span>'
+            : '';
+          const time = node.updatedAt
+            ? '<span class="tree-time">' + escapeHtml(formatRelativeTime(node.updatedAt)) + '</span>'
+            : '';
+
+          const rowInner =
+            '<span class="tree-node-toggle-icon" aria-hidden="true">' + (hasChildren ? '&#9654;' : '') + '</span>' +
+            kindTag +
+            '<span class="tree-node-title" title="' + escapeHtml(title) + '">' + escapeHtml(title) + '</span>' +
+            treeActivityPlate(node) +
+            tokens +
+            time;
+
+          let html = '<li class="tree-node">';
+          if (hasChildren) {
+            html += '<button type="button" class="tree-node-row" data-tree-key="' + escapeHtml(key) + '" aria-expanded="' + expanded + '">' + rowInner + '</button>';
+          } else {
+            html += '<div class="tree-node-row">' + rowInner + '</div>';
+          }
+          if (expanded) {
+            let meta = '';
+            if (node.model) meta += '<span>model: ' + escapeHtml(node.model) + '</span>';
+            if (node.id) meta += '<span>id \u2026' + escapeHtml(String(node.id).slice(-6)) + '</span>';
+            if (node.updatedAt) {
+              try {
+                meta += '<span>written: ' + escapeHtml(new Date(node.updatedAt).toLocaleString()) + '</span>';
+              } catch (e) {}
+            }
+            html += '<div class="tree-node-meta">' + meta + '</div>';
+            html += '<div class="tree-indent">' + renderSubagentNodesHtml(agentId, children) + '</div>';
+          }
+          html += '</li>';
+          return html;
+        }).join('') + '</ul>';
+      }
+
+      function renderTreeRootRowHtml(agent) {
+        const id = agent.id || agent.paneId || 'unknown';
+        const subs = Array.isArray(agent.subagents) ? agent.subagents : [];
+        const total = countTreeNodes(subs);
+        const status = (agent.status || 'unknown').toLowerCase();
+        const harness = agent.harness || 'Agent';
+        const model = agent.model || agent.name || id;
+        const host = agent.host || 'local';
+        const task = agent.taskTitle || agent.lastMessage || agent.toolCall || '(no task title)';
+        const key = 'root::' + id;
+        const expanded = total > 0 && !!state.treeExpanded.get(key);
+
+        return '<div class="tree-root-row">' +
+          '<div class="tree-root-line">' +
+            '<button type="button" class="tree-root-main" data-tree-key="' + escapeHtml(key) + '" aria-expanded="' + expanded + '"' +
+              (total > 0 ? '' : ' disabled aria-disabled="true"') + '>' +
+              '<svg class="tree-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<polyline points="9 18 15 12 9 6"></polyline>' +
+              '</svg>' +
+              '<span class="harness-tag">' + escapeHtml(harness) + '</span>' +
+              '<span class="model-tag" title="' + escapeHtml(model) + '">' + escapeHtml(model) + '</span>' +
+              (host !== 'local' ? '<span class="host-tag">' + escapeHtml(host) + '</span>' : '') +
+              getStatusPlateHtml(status) +
+              unverifiedBadgeHtml(agent) +
+              (total > 0 ? '<span class="tree-count-badge">' + total + ' sub' + (total === 1 ? '' : 's') + '</span>' : '') +
+              '<span class="tree-root-task">' + escapeHtml(task) + '</span>' +
+            '</button>' +
+            '<div class="tree-root-actions">' +
+              '<button type="button" class="tree-terminal-btn" data-open-session="' + escapeHtml(id) + '">Terminal &#8594;</button>' +
+            '</div>' +
+          '</div>' +
+          (expanded && subs.length ? '<div class="tree-children">' + renderSubagentNodesHtml(id, subs) + '</div>' : '') +
+        '</div>';
+      }
+
+      function renderTreeView() {
+        const container = document.getElementById('treeContainer');
+        const subtitle = document.getElementById('treeSubtitle');
+        if (!container) return;
+        // NOTE: state.treeExpanded deliberately persists across renders so
+        // live WS updates never collapse nodes the operator opened.
+
+        if (!state.agents.length) {
+          subtitle.textContent = '';
+          container.innerHTML = '<div class="tree-empty">' +
+            '<div class="tree-empty-title">No Active Agents</div>' +
+            '<div class="tree-empty-desc">Waiting for herdr relay connection or no agents are currently running.</div>' +
+          '</div>';
+          return;
+        }
+
+        const agentsWithSubs = state.agents.filter(a => Array.isArray(a.subagents) && a.subagents.length);
+        const totalSubs = agentsWithSubs.reduce((n, a) => n + countTreeNodes(a.subagents), 0);
+        subtitle.textContent = totalSubs > 0
+          ? (totalSubs + ' subagent' + (totalSubs === 1 ? '' : 's') + ' across ' + agentsWithSubs.length + ' agent' + (agentsWithSubs.length === 1 ? '' : 's'))
+          : 'no subagents detected';
+
+        if (totalSubs === 0) {
+          container.innerHTML = '<div class="tree-empty">' +
+            '<div class="tree-empty-title">No Subagents Running</div>' +
+            '<div class="tree-empty-desc">Trees appear when an agent spawns subagent sessions: OpenCode via its local session store, Claude Code via its transcript sidechains. cline and antigravity-cli do not expose parent links, so their agents always show childless.</div>' +
+          '</div>';
+          return;
+        }
+
+        // Group by repo (fallback workspace), zones sorted by urgency -- same
+        // operator-facing grouping as the fleet view.
+        const groupsMap = new Map();
+        for (const agent of state.agents) {
+          const repoKey = agent.gitRepo || agent.workspace || 'default';
+          if (!groupsMap.has(repoKey)) groupsMap.set(repoKey, []);
+          groupsMap.get(repoKey).push(agent);
+        }
+        const sortedGroups = Array.from(groupsMap.entries()).sort((a, b) => {
+          const maxA = Math.max(...a[1].map(ag => STATUS_WEIGHT[(ag.status || '').toLowerCase()] || 0));
+          const maxB = Math.max(...b[1].map(ag => STATUS_WEIGHT[(ag.status || '').toLowerCase()] || 0));
+          if (maxB !== maxA) return maxB - maxA;
+          return a[0].localeCompare(b[0]);
+        });
+
+        container.innerHTML = sortedGroups.map(([repoKey, groupAgents]) => {
+          groupAgents.sort((a, b) => {
+            const wA = STATUS_WEIGHT[(a.status || '').toLowerCase()] || 0;
+            const wB = STATUS_WEIGHT[(b.status || '').toLowerCase()] || 0;
+            if (wB !== wA) return wB - wA;
+            return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+          });
+          const firstWithBranch = groupAgents.find(a => a.gitBranch) || groupAgents[0];
+          const branch = firstWithBranch ? firstWithBranch.gitBranch : '';
+          const dirty = groupAgents.some(a => a.gitDirty === true);
+
+          return '<section class="repo-zone">' +
+            '<div class="repo-zone-header">' +
+              '<div class="repo-identity">' +
+                '<span class="repo-name">' + escapeHtml(repoKey) + '</span>' +
+                (branch ? '<span class="repo-branch">' + escapeHtml(branch) + (dirty ? '<span class="repo-dirty-flag">*</span>' : '') + '</span>' : '') +
+              '</div>' +
+              '<span class="repo-count-badge">' + groupAgents.length + ' ' + (groupAgents.length === 1 ? 'agent' : 'agents') + '</span>' +
+            '</div>' +
+            '<div class="repo-agent-list">' +
+              groupAgents.map(renderTreeRootRowHtml).join('') +
+            '</div>' +
+          '</section>';
+        }).join('');
+      }
+
+      // ======================================================================
       // Focus Trapping & Accessibility Controller
       // ======================================================================
       function trapFocus(modal, e) {
@@ -3250,7 +3781,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
         if (!opts || !opts.fromRoute) {
           if (parseRoute(window.location.pathname).view !== 'fleet') {
-            navigate('/' + window.location.search);
+            navigate(fleetBasePath());
           }
         }
       }
@@ -3780,6 +4311,30 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         // Theme Toggle
         document.getElementById('themeToggleBtn').addEventListener('click', () => {
           applyTheme(state.theme === 'dark' ? 'light' : 'dark');
+        });
+
+        // Subagent Tree View navigation
+        document.getElementById('treeViewBtn').addEventListener('click', () => {
+          navigate('/tree' + window.location.search);
+        });
+        document.getElementById('treeBackBtn').addEventListener('click', () => {
+          navigate('/' + window.location.search);
+        });
+        document.getElementById('treeContainer').addEventListener('click', (e) => {
+          const terminalBtn = e.target.closest('[data-open-session]');
+          if (terminalBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            navigate(sessionPath(terminalBtn.getAttribute('data-open-session')));
+            return;
+          }
+          const toggleEl = e.target.closest('[data-tree-key]');
+          if (toggleEl && !toggleEl.disabled) {
+            const key = toggleEl.getAttribute('data-tree-key');
+            const willExpand = toggleEl.getAttribute('aria-expanded') !== 'true';
+            state.treeExpanded.set(key, willExpand);
+            renderTreeView();
+          }
         });
 
         document.getElementById('settingsBtn').addEventListener('click', openSettings);
